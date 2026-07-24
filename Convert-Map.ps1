@@ -67,6 +67,7 @@ function Write-LogLine {
         }
         else {
             $LogBox.AppendText("$Message`r`n")
+            [System.Windows.Forms.Application]::DoEvents()
         }
     }
     else {
@@ -429,50 +430,8 @@ function Show-ConverterGui {
         $state.OutTouched = $false
     }
 
-    $worker = New-Object System.ComponentModel.BackgroundWorker
-    $worker.WorkerReportsProgress = $false
-    $worker.WorkerSupportsCancellation = $false
-    $worker.Add_DoWork({
-            param($sender, $e)
-            $p = $e.Argument
-            $e.Result = Invoke-Conversion `
-                -H3mPath $p.H3mPath `
-                -CorePath $p.CorePath `
-                -OutDirPath $p.OutPath `
-                -Sid $p.Sid `
-                -TemplatePath $p.TemplatePath `
-                -InstallMapsPath $p.InstallPath `
-                -LogBox $p.LogBox
-        }.GetNewClosure())
-    $worker.Add_RunWorkerCompleted({
-            param($sender, $e)
-            $state.Busy = $false
-            $btnConvert.Enabled = $true
-            if ($e.Error) {
-                $err = $e.Error.Message
-                Write-LogLine "ERROR: $err" -LogBox $txtLog
-                $lblStatus.Text = "Failed."
-                [System.Windows.Forms.MessageBox]::Show(
-                    $form,
-                    $err,
-                    "Conversion failed",
-                    [System.Windows.Forms.MessageBoxButtons]::OK,
-                    [System.Windows.Forms.MessageBoxIcon]::Error
-                ) | Out-Null
-                return
-            }
-            $lblStatus.Text = "Done."
-            [System.Windows.Forms.MessageBox]::Show(
-                $form,
-                "Conversion finished. See the log for warnings and the output path.",
-                "Convert Map",
-                [System.Windows.Forms.MessageBoxButtons]::OK,
-                [System.Windows.Forms.MessageBoxIcon]::Information
-            ) | Out-Null
-        }.GetNewClosure())
-
     $btnConvert.Add_Click({
-            if ($state.Busy -or $worker.IsBusy) { return }
+            if ($state.Busy) { return }
             $txtLog.Clear()
             $h3mPath = $txtH3m.Text.Trim().Trim('"')
             $corePath = $txtCore.Text.Trim().Trim('"')
@@ -490,18 +449,46 @@ function Show-ConverterGui {
                 $txtOut.Text = $outPath
             }
 
+            # Run on the UI thread. BackgroundWorker has no PowerShell runspace
+            # ("There is no runspace available to run scripts in this thread").
             $state.Busy = $true
             $btnConvert.Enabled = $false
             $lblStatus.Text = "Working..."
-            $worker.RunWorkerAsync(@{
-                    H3mPath      = $h3mPath
-                    CorePath     = $corePath
-                    OutPath      = $outPath
-                    Sid          = $sid
-                    TemplatePath = $templatePath
-                    InstallPath  = $installPath
-                    LogBox       = $txtLog
-                })
+            [System.Windows.Forms.Application]::DoEvents()
+            try {
+                Invoke-Conversion `
+                    -H3mPath $h3mPath `
+                    -CorePath $corePath `
+                    -OutDirPath $outPath `
+                    -Sid $sid `
+                    -TemplatePath $templatePath `
+                    -InstallMapsPath $installPath `
+                    -LogBox $txtLog | Out-Null
+                $lblStatus.Text = "Done."
+                [System.Windows.Forms.MessageBox]::Show(
+                    $form,
+                    "Conversion finished. See the log for warnings and the output path.",
+                    "Convert Map",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Information
+                ) | Out-Null
+            }
+            catch {
+                $err = $_.Exception.Message
+                Write-LogLine "ERROR: $err" -LogBox $txtLog
+                $lblStatus.Text = "Failed."
+                [System.Windows.Forms.MessageBox]::Show(
+                    $form,
+                    $err,
+                    "Conversion failed",
+                    [System.Windows.Forms.MessageBoxButtons]::OK,
+                    [System.Windows.Forms.MessageBoxIcon]::Error
+                ) | Out-Null
+            }
+            finally {
+                $state.Busy = $false
+                $btnConvert.Enabled = $true
+            }
         }.GetNewClosure())
 
     [void]$form.ShowDialog()
