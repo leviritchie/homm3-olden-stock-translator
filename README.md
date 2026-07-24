@@ -10,21 +10,24 @@ Expect to run into some issues, but this gives you a decent start without having
 1. Download the latest **Source zip** from [Releases](../../releases)
    (`homm3-olden-stock-translator-*.zip`), or clone this repo.
 2. Unzip it somewhere.
-3. Double-click **`Convert-Map.bat`** (or run `Convert-Map.ps1`).
-4. When prompted, provide:
+3. Double-click **`Convert-Map.bat`** (or run `Convert-Map.ps1`) to open the converter window.
+4. In the GUI, choose:
    - your `.h3m`
    - Your `HeroesOldenEra_Data/StreamingAssets/Core.zip`
    - optional: your Olden `maps\` folder to auto-install the result
-5. Start Olden Era and open the scenario as a custom game.
+5. Click **Convert**, then start Olden Era and open the scenario as a custom game.
 
 `Thirst_for_Power.map` is auto-detected beside `Core.zip` under `StreamingAssets/maps/`
 (every stock Olden install has it). Override only if needed via `-TemplateMap` /
 `--template-map` / `STOCK_TEMPLATE_MAP`.
 
-### Example
+First run downloads official CPython from python.org into `.runtime\` (SHA256
+verified). There is no custom translator `.exe`.
+
+### CLI / scripting example
 
 ```powershell
-.\Convert-Map.ps1 `
+.\Convert-Map.ps1 -Cli `
   -H3m "D:\HoMM3\Maps\Twins.h3m" `
   -MapSid "vanilla_stock_twins" `
   -OutDir ".\artifacts\twins" `
@@ -37,7 +40,7 @@ Expect to run into some issues, but this gives you a decent start without having
 - Oceans are dried up, instead becoming pathable sand terrain at a reduced elevation.
 - Underground layers are simulated using extra large maps with sections separated by portals
 - Unsupported H3 objects (or victory types with no Olden parallel) warn, omit or fall back
-  that piece, and still write the map. Warnings show in the CLI summary and manifest.
+  that piece, and still write the map. Warnings show in the CLI/GUI log and manifest.
 - Maps with events will merge a text-only dialog overlays into `Core.zip`
   (a backup is created once). This means some events may break when the game is patched, until you run the utility again.
 
