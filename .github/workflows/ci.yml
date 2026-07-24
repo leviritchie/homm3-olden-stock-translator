@@ -1,0 +1,32 @@
+name: CI
+
+# Lightweight public checks — no Core.zip or commercial .h3m required.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  import-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: pip install -e .
+      - name: Import smoke
+        run: |
+          python - <<'PY'
+          from vanilla_stock.stock_neutral_strength import load_strength_model, rounded_requested_value
+          from vanilla_stock import SCHEMA_MAP
+          model = load_strength_model()
+          assert model["schema"] == "vanilla_stock.h3_neutral_strength_model.v1"
+          assert rounded_requested_value(1640.0, rounding=50.0) == 1650.0
+          print("ok", SCHEMA_MAP, "tiers", sorted(model["tierMedianSquadValuesFromGeH3"]))
+          PY

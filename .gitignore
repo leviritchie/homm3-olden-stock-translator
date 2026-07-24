@@ -13,6 +13,10 @@ artifacts/
 *.map
 optional_core_overlay_for_events/
 
+# Local portable runtime (official CPython embeddable, fetched by Convert-Map.ps1)
+.runtime/
+release_dist/
+
 # Editors / OS
 .idea/
 .vscode/

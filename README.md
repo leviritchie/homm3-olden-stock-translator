@@ -1,83 +1,90 @@
 # HoMM3 → stock Olden Era scenario translator
 
-MIT-licensed Python tools that convert standalone Heroes of Might and Magic III
-`.h3m` scenarios into **stock-legal** Heroes of Might and Magic: Olden Era `.map`
-files.
+Downloadable Windows utility that converts Heroes of Might and Magic III `.h3m`
+scenarios into **stock-legal** Olden Era `.map` files.
 
-This lane does **not** depend on Golden Era / custom Core overlays or the
-OfflineUnlockMod plugin. Output SIDs and tiles must exist in stock Olden
-`Core.zip`.
+No Golden Era install, no custom plugin, and **no translator `.exe`** from this
+project. The release is readable source plus a launcher.
 
-## What you must own (not redistributed here)
+## For players (no Python install required)
 
-You need your own copies of:
+1. Download the latest **Source zip** from [Releases](../../releases)
+   (`homm3-olden-stock-translator-*.zip`), or clone this repo.
+2. Unzip it somewhere permanent.
+3. Double-click **`Convert-Map.bat`** (or run `Convert-Map.ps1`).
+4. First run downloads **official CPython** from [python.org](https://www.python.org/)
+   into a local `.runtime\` folder and verifies the **SHA256** checksum, then
+   installs this translator with pip.
+5. When prompted, provide:
+   - your `.h3m`
+   - stock Olden `HeroesOldenEra_Data/StreamingAssets/Core.zip`
+   - a stock template map such as `maps/Thirst_for_Power.map`
+   - optional: your Olden `maps\` folder to auto-install the result
+6. Start **stock** Olden Era and open the scenario (the SID you chose).
 
-1. A HoMM3 `.h3m` map (Complete / SoD / HotA, etc.)
-2. Stock Olden Era install files:
-   - `HeroesOldenEra_Data/StreamingAssets/Core.zip`
-   - a stock template scenario such as `maps/Thirst_for_Power.map`
+### Non-interactive example
 
-This repository ships **translator source only**. It does not include game
-binaries, `Core.zip`, template maps, or commercial `.h3m` files.
-
-## Quick start
-
-```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-pip install -e .
-
-export STOCK_CORE="/path/to/HeroesOldenEra_Data/StreamingAssets/Core.zip"
-export STOCK_TEMPLATE_MAP="/path/to/maps/Thirst_for_Power.map"
-# optional install target (stock maps folder):
-export STOCK_MAPS_DIR="/path/to/maps"
-
-python tools/build_vanilla_stock_map.py \
-  --h3m /path/to/Twins.h3m \
-  --out-dir ./artifacts/twins \
-  --map-sid vanilla_stock_twins \
-  --install-maps-dir "$STOCK_MAPS_DIR"
+```powershell
+.\Convert-Map.ps1 `
+  -H3m "D:\HoMM3\Maps\Twins.h3m" `
+  -MapSid "vanilla_stock_twins" `
+  -OutDir ".\artifacts\twins" `
+  -StockCore "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\Core.zip" `
+  -TemplateMap "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\maps\Thirst_for_Power.map" `
+  -InstallMapsDir "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\maps"
 ```
 
-Or with the console script after `pip install -e .`:
+### Trust model
 
-```bash
-homm3-olden-stock-map --h3m Twins.h3m --out-dir ./artifacts/twins --map-sid vanilla_stock_twins
-```
+| Piece | Who provides it |
+|--------|------------------|
+| Translator logic | This repo (Python source you can read) |
+| Python runtime | python.org embeddable build (checksum pinned in `Convert-Map.ps1`) |
+| Game data | Your own Olden + HoMM3 installs (never redistributed here) |
 
-## Neutral army strength
+We intentionally **do not** ship a frozen/custom `.exe` of the converter.
 
-Random and typed neutrals are budgeted for Olden `propRandomSquads.requestedValue` as:
+## What you must own
 
-`round_half_up(H3_count_or_nominal × squadValue, 50)`
-
-`squadValue` comes from a **baked snapshot of Golden Era `h3_` unit economy numbers**
-(ported H3 strength in Olden value space). Those are balance constants, not game
-assets. Stock SpawnsCreator still fills the budget with **stock** native units.
-
-Regenerating the snapshot (maintainers only) needs a local GE `Core.zip` and the
-private monorepo creature-type map via `GE_CORE` + `MONOREPO_SURFACE_EMIT`.
+1. A HoMM3 `.h3m` (Complete / SoD / HotA, etc.)
+2. Stock Olden Era:
+   - `StreamingAssets/Core.zip`
+   - a stock template `.map` (e.g. `Thirst_for_Power.map`)
 
 ## Limits (fail-closed)
 
-- Stock Core tiles are `{1..7}` only. Ocean uses a Sand basin stand-in; underground
-  walkable cells and elevated rock use Dirt (no GE Burrow/Water/Void tiles).
-- Unsupported H3 objects/victory types fail closed with diagnostics.
-- Map-event dialogs may write a small text-only LocKit overlay into `Core.zip`
-  when events are present (`tools/install_vanilla_stock_event_dialog_overlay.py`).
-  That mutates your install; a backup is created once per Core path.
-- Runtime load / combat feel in stock Olden remains **unvalidated** until you prove it.
+- Stock tiles are `{1..7}` only. Ocean uses a Sand basin stand-in; underground /
+  elevated rock use Dirt (no Golden Era Burrow/Water/Void tiles).
+- Unsupported H3 objects or victory types stop with a clear error.
+- Maps with events may merge a small text-only dialog overlay into `Core.zip`
+  (a backup is created once). Review that before running on a precious install.
+- Runtime playability in stock Olden is **not** claimed until you verify it.
 
-## Layout
+## Neutral army strength
 
+Budgets use `requestedValue = round(H3_count_or_nominal × squadValue, 50)` with a
+baked snapshot of Golden Era `h3_` unit economy numbers (balance constants, not
+game assets). SpawnsCreator still fills fights with **stock** units.
+
+## Developers (already have Python)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e .
+$env:STOCK_CORE = "...\Core.zip"
+$env:STOCK_TEMPLATE_MAP = "...\Thirst_for_Power.map"
+python tools/build_vanilla_stock_map.py --h3m Twins.h3m --out-dir .\artifacts\twins --map-sid vanilla_stock_twins
 ```
-src/vanilla_stock/     # translator package
-src/*.py               # H3 decode + Olden map I/O helpers
-tools/                 # CLI entrypoints
-examples/              # sample batch manifest (paths are placeholders)
+
+### Publishing a release zip
+
+```powershell
+python tools/build_release_zip.py --version 0.1.0
+# upload release_dist/homm3-olden-stock-translator-0.1.0.zip to GitHub Releases
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Game assets remain the property of their respective
-owners; do not redistribute them with this project.
+MIT — see [LICENSE](LICENSE). Game assets remain their owners’ property; do not
+redistribute them with this project.

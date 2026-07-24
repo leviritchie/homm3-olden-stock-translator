@@ -1,0 +1,6 @@
+# Drop your own .h3m here in a private fork if you prefer not to use h3m_url.
+# Public clones should use the workflow's h3m_url input instead.
+# Force-add despite root *.h3m gitignore:  git add -f user_maps/Twins.h3m
+*
+!.gitignore
+!README.md

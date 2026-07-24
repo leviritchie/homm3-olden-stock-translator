@@ -29,7 +29,6 @@ homm3-olden-stock-map = "vanilla_stock.emit_map:main_emit_cli"
 package-dir = { "" = "src" }
 py-modules = [
   "h3m_format",
-  "h3m_global_events",
   "h3m_object_registry",
   "h3m_object_walk",
   "h3m_scenario_translation",

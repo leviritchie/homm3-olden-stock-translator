@@ -1,0 +1,5 @@
+# Optional local-only stock files for developers. Never commit Core.zip or .map templates.
+# GitHub Actions users: set STOCK_CORE_URL and STOCK_TEMPLATE_MAP_URL secrets instead.
+*
+!.gitignore
+!README.md
