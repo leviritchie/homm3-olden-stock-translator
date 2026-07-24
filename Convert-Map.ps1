@@ -5,8 +5,9 @@
 
 .DESCRIPTION
   First run downloads the official CPython 3.12 Windows embeddable package from
-  python.org (SHA256 verified) into .runtime\, installs this translator with pip,
-  then runs the conversion. You still need your own Core.zip, template .map, and .h3m.
+  python.org (SHA256 verified) into .runtime\, then runs the translator from src\.
+  You need your own Core.zip and .h3m. The stock template map
+  (Thirst_for_Power.map) is auto-detected beside Core.zip under maps\.
 
 .EXAMPLE
   .\Convert-Map.ps1
@@ -14,7 +15,7 @@
 
 .EXAMPLE
   .\Convert-Map.ps1 -H3m "D:\Maps\Twins.h3m" -MapSid "vanilla_stock_twins" `
-    -StockCore "D:\Steam\...\Core.zip" -TemplateMap "D:\Steam\...\Thirst_for_Power.map" `
+    -StockCore "D:\Steam\...\Core.zip" `
     -OutDir ".\artifacts\twins" -InstallMapsDir "D:\Steam\...\maps"
 #>
 [CmdletBinding()]
@@ -110,12 +111,13 @@ function Resolve-Inputs {
     $script:TemplateMap = if ($TemplateMap) { $TemplateMap } else { $env:STOCK_TEMPLATE_MAP }
     $script:InstallMapsDir = if ($InstallMapsDir) { $InstallMapsDir } else { $env:STOCK_MAPS_DIR }
 
-    $interactive = -not $script:H3m -or -not $script:OutDir -or -not $script:StockCore -or -not $script:TemplateMap
+    $interactive = -not $script:H3m -or -not $script:OutDir -or -not $script:StockCore
     if ($interactive) {
         Write-Host ""
         Write-Host "HoMM3 -> stock Olden Era map converter"
         Write-Host "This launcher uses official Python from python.org (verified checksum)."
         Write-Host "It does not ship a custom .exe of the translator."
+        Write-Host "Template map Thirst_for_Power.map is auto-detected beside Core.zip."
         Write-Host ""
         $script:H3m = Read-Default "Path to .h3m" $script:H3m
         $defaultSid = if ($script:MapSid) {
@@ -127,15 +129,13 @@ function Resolve-Inputs {
         $defaultOut = if ($script:OutDir) { $script:OutDir } else { Join-Path $Root "artifacts\$($script:MapSid)" }
         $script:OutDir = Read-Default "Output folder" $defaultOut
         $script:StockCore = Read-Default "Path to stock Core.zip" $script:StockCore
-        $script:TemplateMap = Read-Default "Path to stock template .map (e.g. Thirst_for_Power.map)" $script:TemplateMap
         $installDefault = if ($script:InstallMapsDir) { $script:InstallMapsDir } else { "" }
         $script:InstallMapsDir = Read-Default "Install into Olden maps folder? (path or leave empty)" $installDefault
     }
 
     foreach ($pair in @(
             @{ Name = "H3m"; Path = $script:H3m },
-            @{ Name = "StockCore"; Path = $script:StockCore },
-            @{ Name = "TemplateMap"; Path = $script:TemplateMap }
+            @{ Name = "StockCore"; Path = $script:StockCore }
         )) {
         if (-not (Test-Path -LiteralPath $pair.Path)) {
             throw "$($pair.Name) not found: $($pair.Path)"
@@ -158,9 +158,11 @@ $argsList = @(
     "--h3m", $script:H3m,
     "--out-dir", $script:OutDir,
     "--map-sid", $script:MapSid,
-    "--stock-core", $script:StockCore,
-    "--template-map", $script:TemplateMap
+    "--stock-core", $script:StockCore
 )
+if ($script:TemplateMap) {
+    $argsList += @("--template-map", $script:TemplateMap)
+}
 if ($script:InstallMapsDir) {
     $argsList += @("--install-maps-dir", $script:InstallMapsDir)
 }

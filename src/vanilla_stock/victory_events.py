@@ -313,34 +313,40 @@ def apply_victory_contract(
     victory = header.get("victory") or {}
     victory_type = int(victory.get("type"))
     victory_name = str(victory.get("name") or "")
+    fallback_warning: str | None = None
 
     if victory_type == h3m.VICTORY_WINSTANDARD:
         built = build_winstandard_quest_script(map_title=map_title, header=header)
         mode = "WINSTANDARD"
     elif victory_type == h3m.VICTORY_TAKEMINES:
-        if source_mine_record_count <= 0:
-            raise VanillaStockVictoryError("TAKEMINES map has no mine/abandoned-mine object records")
-        if len(emitted_mine_object_ids) != source_mine_record_count:
-            raise VanillaStockVictoryError(
-                "TAKEMINES mine entity coverage incomplete: "
-                f"emitted {len(emitted_mine_object_ids)} of {source_mine_record_count} source mine records"
+        if source_mine_record_count <= 0 or len(emitted_mine_object_ids) != source_mine_record_count:
+            built = build_winstandard_quest_script(map_title=map_title, header=header)
+            mode = "WINSTANDARD_FALLBACK"
+            fallback_warning = (
+                f"TAKEMINES victory incomplete "
+                f"(emitted {len(emitted_mine_object_ids)} of {source_mine_record_count} mines); "
+                "falling back to DefeatAll / WINSTANDARD"
             )
-        entity_sids = [f"mine{i + 1}" for i in range(len(emitted_mine_object_ids))]
-        for object_id, entity_sid in zip(emitted_mine_object_ids, entity_sids):
-            props.setdefault("propEntities", []).append(
-                {"type": 0, "id": int(object_id), "sid": entity_sid}
+        else:
+            entity_sids = [f"mine{i + 1}" for i in range(len(emitted_mine_object_ids))]
+            for object_id, entity_sid in zip(emitted_mine_object_ids, entity_sids):
+                props.setdefault("propEntities", []).append(
+                    {"type": 0, "id": int(object_id), "sid": entity_sid}
+                )
+            allow_normal = bool(victory.get("allowNormalVictory"))
+            built = build_takemines_quest_script(
+                map_title=map_title,
+                mine_entity_sids=entity_sids,
+                allow_normal_victory=allow_normal,
             )
-        allow_normal = bool(victory.get("allowNormalVictory"))
-        built = build_takemines_quest_script(
-            map_title=map_title,
-            mine_entity_sids=entity_sids,
-            allow_normal_victory=allow_normal,
-        )
-        mode = "TAKEMINES"
+            mode = "TAKEMINES"
     else:
-        raise VanillaStockVictoryError(
-            f"vanilla_stock pilot does not yet emit victory condition {victory_name} ({victory_type}); "
-            "extend after WINSTANDARD/TAKEMINES pilot is solid"
+        # Unsupported special victory → still emit a playable DefeatAll map.
+        built = build_winstandard_quest_script(map_title=map_title, header=header)
+        mode = "WINSTANDARD_FALLBACK"
+        fallback_warning = (
+            f"unsupported victory condition {victory_name} ({victory_type}); "
+            "falling back to DefeatAll / WINSTANDARD"
         )
 
     start_settings = meta.setdefault("startSettings", {})
@@ -348,7 +354,7 @@ def apply_victory_contract(
     meta["displayWinCondition"] = str(built.get("objectiveText") or "")
     map_data["mapDesc"] = meta.get("desc") or map_data.get("mapDesc") or ""
 
-    return {
+    result = {
         "mode": mode,
         "victoryName": victory_name,
         "allowNormalVictory": victory.get("allowNormalVictory"),
@@ -357,9 +363,12 @@ def apply_victory_contract(
         "objectiveText": built.get("objectiveText"),
         "counters": built.get("counters") or [],
         "quests": built.get("quests") or [],
-        "mineEntityCount": built.get("mineEntityCount"),
+        "mineEntityCount": built.get("mineEntityCount") or 0,
         "mineEntitySids": built.get("mineEntitySids"),
     }
+    if mode == "WINSTANDARD_FALLBACK":
+        result["warning"] = fallback_warning
+    return result
 
 
 def h3_players_mask_to_sides(players_mask: Any) -> str:

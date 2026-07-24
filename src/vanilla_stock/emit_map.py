@@ -95,6 +95,7 @@ DEFAULT_STOCK_CORE = _env_path("STOCK_CORE")
 DEFAULT_STOCK_TEMPLATE_MAP = _env_path("STOCK_TEMPLATE_MAP")
 DEFAULT_STOCK_MAPS_DIR = _env_path("STOCK_MAPS_DIR")
 DEFAULT_SUBSTITUTION_TABLE = Path(__file__).with_name("substitution_table.json")
+STOCK_TEMPLATE_MAP_BASENAME = "Thirst_for_Power.map"
 
 CITY_BUILDINGS_BAN_SID = "default_buildings_ban"
 CITY_BUILDINGS_CONSTRUCTION_SID = "rich_buildings_construction"
@@ -104,6 +105,20 @@ FORBIDDEN_SID_SUBSTRINGS = ("homm3", "h3_", "golden_era")
 
 class VanillaStockEmitError(ValueError):
     """Raised when a stock map cannot be emitted without hiding a mismatch."""
+
+
+def stock_template_map_beside_core(stock_core: Path) -> Path:
+    """Every stock install ships Thirst beside Core.zip under StreamingAssets/maps/."""
+
+    return stock_core.resolve().parent / "maps" / STOCK_TEMPLATE_MAP_BASENAME
+
+
+def resolve_stock_template_map(stock_core: Path, template_map: Path | None) -> Path:
+    if template_map is not None:
+        return Path(template_map)
+    if DEFAULT_STOCK_TEMPLATE_MAP is not None:
+        return DEFAULT_STOCK_TEMPLATE_MAP
+    return stock_template_map_beside_core(stock_core)
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -194,6 +209,25 @@ def append_object_instance(
             group["levels"].append(0.0)
             return
     objects.append({"sid": sid, "ids": [object_id], "nodes": [node], "rotations": [rotation], "levels": [0.0]})
+
+
+def remove_object_instance(objects: list[dict[str, Any]], object_id: int) -> str | None:
+    """Remove one emitted instance by id. Returns the SID that held it, if any."""
+
+    for group in objects:
+        ids = group.get("ids")
+        if not isinstance(ids, list) or object_id not in ids:
+            continue
+        index = ids.index(object_id)
+        for key in ("ids", "nodes", "rotations", "levels"):
+            values = group.get(key)
+            if isinstance(values, list) and index < len(values):
+                values.pop(index)
+        sid = str(group.get("sid") or "")
+        if not ids:
+            objects.remove(group)
+        return sid or None
+    return None
 
 
 def terrain_biome_at(layer_tiles_by_key: dict[str, dict[str, Any]], layer: int, x: int, y: int) -> str:
@@ -601,18 +635,26 @@ def build_vanilla_stock_map(
     *,
     h3m_path: Path,
     stock_core: Path = DEFAULT_STOCK_CORE,
-    template_map: Path = DEFAULT_STOCK_TEMPLATE_MAP,
+    template_map: Path | None = DEFAULT_STOCK_TEMPLATE_MAP,
     out_dir: Path,
     map_sid: str | None = None,
     install_maps_dir: Path | None = None,
     substitution_table: Path = DEFAULT_SUBSTITUTION_TABLE,
 ) -> dict[str, Any]:
+    if stock_core is None:
+        raise VanillaStockEmitError("stock Core.zip path is required")
     if not h3m_path.is_file():
         raise VanillaStockEmitError(f"H3M not found: {h3m_path}")
     if not stock_core.is_file():
         raise VanillaStockEmitError(f"stock Core.zip not found: {stock_core}")
+    template_map = resolve_stock_template_map(stock_core, template_map)
     if not template_map.is_file():
-        raise VanillaStockEmitError(f"stock template map not found: {template_map}")
+        raise VanillaStockEmitError(
+            f"stock template map not found beside Core.zip: {template_map} "
+            f"(expected StreamingAssets/maps/{STOCK_TEMPLATE_MAP_BASENAME})"
+        )
+
+    warnings: list[str] = []
 
     stock_objects = load_stock_object_ids(stock_core)
     try:
@@ -725,7 +767,15 @@ def build_vanilla_stock_map(
                     terrain_biome=biome,
                 )
             except VanillaStockObjectMapError as ex:
-                raise VanillaStockEmitError(str(ex)) from ex
+                warning = f"omit unsupported object {_entity_key(entity)}: {ex}"
+                warnings.append(warning)
+                omit_counts["unsupported_object_map_error_omit"] += 1
+                decisions_by_source_index[object_id] = {
+                    "action": "omit",
+                    "reason": "unsupported_object_map_error_omit",
+                    "detail": str(ex),
+                }
+                continue
         decision = _force_stock_travel_decision(record, decision)
         if (
             decision.get("action") == "emit"
@@ -741,19 +791,49 @@ def build_vanilla_stock_map(
         decisions_by_source_index[object_id] = dict(decision)
 
         if decision.get("action") == "miss":
-            omit_counts[str(decision.get("reason") or "copied_substitution_miss")] += 1
+            reason = str(decision.get("reason") or "copied_substitution_miss")
+            omit_counts[reason] += 1
+            warnings.append(f"omit unmapped object {_entity_key(entity)}: {reason}")
             continue
         if decision.get("action") == "omit":
-            omit_counts[str(decision.get("reason") or "unmapped_object_omit")] += 1
+            reason = str(decision.get("reason") or "unmapped_object_omit")
+            omit_counts[reason] += 1
+            warnings.append(f"omit unsupported object {_entity_key(entity)}: {reason}")
             continue
         if decision.get("action") != "emit":
-            raise VanillaStockEmitError(f"unknown object decision: {decision}")
+            warning = f"omit object {_entity_key(entity)} with unknown decision {decision!r}"
+            warnings.append(warning)
+            omit_counts["unknown_object_decision_omit"] += 1
+            decisions_by_source_index[object_id] = {
+                "action": "omit",
+                "reason": "unknown_object_decision_omit",
+                "detail": repr(decision),
+            }
+            continue
 
         replacement = str(decision["sid"])
         if replacement not in stock_objects:
-            raise VanillaStockEmitError(f"emit SID not in stock Core: {replacement}")
+            warning = (
+                f"omit object {_entity_key(entity)}: emit SID not in stock Core: {replacement}"
+            )
+            warnings.append(warning)
+            omit_counts["emit_sid_missing_from_stock_omit"] += 1
+            decisions_by_source_index[object_id] = {
+                "action": "omit",
+                "reason": "emit_sid_missing_from_stock_omit",
+                "sid": replacement,
+            }
+            continue
         if any(token in replacement.lower() for token in FORBIDDEN_SID_SUBSTRINGS):
-            raise VanillaStockEmitError(f"refusing GE/h3 SID leak: {replacement}")
+            warning = f"omit object {_entity_key(entity)}: refusing GE/h3 SID leak: {replacement}"
+            warnings.append(warning)
+            omit_counts["ge_sid_leak_omit"] += 1
+            decisions_by_source_index[object_id] = {
+                "action": "omit",
+                "reason": "ge_sid_leak_omit",
+                "sid": replacement,
+            }
+            continue
         kind = str(decision.get("kind") or "")
         if kind == "scenery":
             plan_record = dict(record)
@@ -770,7 +850,15 @@ def build_vanilla_stock_map(
                     source_height=atlas.source_height,
                 )
             except VanillaStockSceneryFootprintError as ex:
-                raise VanillaStockEmitError(str(ex)) from ex
+                warning = f"omit scenery {_entity_key(entity)}: {ex}"
+                warnings.append(warning)
+                omit_counts["scenery_footprint_error_omit"] += 1
+                decisions_by_source_index[object_id] = {
+                    "action": "omit",
+                    "reason": "scenery_footprint_error_omit",
+                    "detail": str(ex),
+                }
+                continue
             placement_rows: list[dict[str, Any]] = []
             for placement_index, placement in enumerate(footprint_plan["placements"]):
                 placement_id = object_id if placement_index == 0 else next_synthetic_object_id
@@ -816,7 +904,15 @@ def build_vanilla_stock_map(
                     rotation=0,
                 )
             except town_gate_align.TownGateAlignError as ex:
-                raise VanillaStockEmitError(f"town GATE align failed: {ex}") from ex
+                warning = f"omit town {_entity_key(entity)}: town GATE align failed: {ex}"
+                warnings.append(warning)
+                omit_counts["town_gate_align_error_omit"] += 1
+                decisions_by_source_index[object_id] = {
+                    "action": "omit",
+                    "reason": "town_gate_align_error_omit",
+                    "detail": str(ex),
+                }
+                continue
             decisions_by_source_index[object_id] = {
                 **decisions_by_source_index[object_id],
                 "townAnchorEvidence": town_anchor_evidence,
@@ -829,7 +925,18 @@ def build_vanilla_stock_map(
             if map_event_guard_info.get("hasGuards"):
                 replacement = STOCK_MAP_EVENT_GUARD_SID
                 if replacement not in stock_objects:
-                    raise VanillaStockEmitError(f"map event host SID not in stock Core: {replacement}")
+                    warning = (
+                        f"omit map event {_entity_key(entity)}: "
+                        f"guard host SID not in stock Core: {replacement}"
+                    )
+                    warnings.append(warning)
+                    omit_counts["map_event_guard_sid_missing_omit"] += 1
+                    decisions_by_source_index[object_id] = {
+                        "action": "omit",
+                        "reason": "map_event_guard_sid_missing_omit",
+                        "sid": replacement,
+                    }
+                    continue
                 append_object_instance(objects, replacement, object_id, node)
                 emit_counts[replacement] += 1
                 guarded_event_host_nodes[object_id] = int(node)
@@ -855,12 +962,43 @@ def build_vanilla_stock_map(
             if free_choice:
                 faction = ""
             elif not faction or faction not in stock_factions:
-                raise VanillaStockEmitError(f"town faction not in stock Core: {faction!r}")
+                warning = (
+                    f"omit town {_entity_key(entity)}: "
+                    f"no stock faction parallel for {faction!r}"
+                )
+                warnings.append(warning)
+                removed_sid = remove_object_instance(objects, object_id)
+                if removed_sid:
+                    emit_counts[removed_sid] -= 1
+                    if emit_counts[removed_sid] <= 0:
+                        del emit_counts[removed_sid]
+                omit_counts["town_faction_unsupported_omit"] += 1
+                decisions_by_source_index[object_id] = {
+                    "action": "omit",
+                    "reason": "town_faction_unsupported_omit",
+                    "factionSid": faction,
+                }
+                continue
             # Owned free-choice / unmapped towns stay random-city so the lobby can pick.
             if free_choice and replacement != "random-city":
-                raise VanillaStockEmitError(
-                    f"free-choice town must emit random-city, got {replacement!r} at {_entity_key(entity)}"
+                warning = (
+                    f"free-choice town {_entity_key(entity)} remapped "
+                    f"{replacement!r} → random-city"
                 )
+                warnings.append(warning)
+                removed_sid = remove_object_instance(objects, object_id)
+                if removed_sid:
+                    emit_counts[removed_sid] -= 1
+                    if emit_counts[removed_sid] <= 0:
+                        del emit_counts[removed_sid]
+                replacement = "random-city"
+                append_object_instance(objects, replacement, object_id, node)
+                emit_counts[replacement] += 1
+                decisions_by_source_index[object_id] = {
+                    **decisions_by_source_index[object_id],
+                    "sid": replacement,
+                    "reason": f"{decision.get('reason')}|force_random_city_free_choice",
+                }
             city_rows.append(
                 {
                     "type": 0,
@@ -937,9 +1075,20 @@ def build_vanilla_stock_map(
             try:
                 rarity = _stock_random_item_rarity(entity)
             except (TypeError, ValueError) as ex:
-                raise VanillaStockEmitError(
-                    f"random-item rarity unresolved for {_entity_key(entity)}: {ex}"
-                ) from ex
+                warning = f"omit random-item {_entity_key(entity)}: {ex}"
+                warnings.append(warning)
+                removed_sid = remove_object_instance(objects, object_id)
+                if removed_sid:
+                    emit_counts[removed_sid] -= 1
+                    if emit_counts[removed_sid] <= 0:
+                        del emit_counts[removed_sid]
+                omit_counts["random_item_rarity_omit"] += 1
+                decisions_by_source_index[object_id] = {
+                    "action": "omit",
+                    "reason": "random_item_rarity_omit",
+                    "detail": str(ex),
+                }
+                continue
             random_item_rows.append({"type": 0, "id": object_id, "rarity": rarity})
         if kind == "mine":
             emitted_mine_object_ids.append(object_id)
@@ -1367,33 +1516,64 @@ def build_vanilla_stock_map(
             emitted_mine_object_ids=emitted_mine_object_ids,
             source_mine_record_count=len(source_mines),
         )
+        if victory_info.get("warning"):
+            warnings.append(str(victory_info["warning"]))
         occupied_for_events = _occupied_nodes_for_event_relocation(
             objects,
             stock_object_configs=stock_object_configs,
             atlas_width=atlas.atlas_width,
             atlas_height=atlas.atlas_height,
         )
-        event_info = apply_map_events(
-            map_sid=sid,
-            map_title=title,
-            event_records=emitted_event_records,
-            props=props,
-            provisional_nodes=unguarded_event_provisional_nodes,
-            host_nodes=guarded_event_host_nodes,
-            levels_map=list(arrays["levelsMap"]),
-            climbs_map=list(arrays["climbsMap"]),
-            occupied_nodes=occupied_for_events,
-            envelope_nodes=_envelope_nodes_for_atlas(atlas),
-            atlas_width=atlas.atlas_width,
-            atlas_height=atlas.atlas_height,
-            layer_width=atlas.source_width,
-            first_marker_id=1,
-        )
-        timed_info = apply_global_timed_events(
-            map_sid=sid,
-            map_title=title,
-            global_timed_events=(alignment.get("globalTimedEvents") or None),
-        )
+        try:
+            event_info = apply_map_events(
+                map_sid=sid,
+                map_title=title,
+                event_records=emitted_event_records,
+                props=props,
+                provisional_nodes=unguarded_event_provisional_nodes,
+                host_nodes=guarded_event_host_nodes,
+                levels_map=list(arrays["levelsMap"]),
+                climbs_map=list(arrays["climbsMap"]),
+                occupied_nodes=occupied_for_events,
+                envelope_nodes=_envelope_nodes_for_atlas(atlas),
+                atlas_width=atlas.atlas_width,
+                atlas_height=atlas.atlas_height,
+                layer_width=atlas.source_width,
+                first_marker_id=1,
+            )
+        except VanillaStockVictoryError as ex:
+            warnings.append(f"map events omitted: {ex}")
+            event_info = {
+                "eventCount": 0,
+                "unguardedCount": 0,
+                "guardedCount": 0,
+                "giveResActionCount": 0,
+                "removeResActionCount": 0,
+                "spawnMapObjectActionCount": 0,
+                "omittedRewardGaps": [],
+                "notes": [str(ex)],
+                "quests": [],
+                "counters": [],
+                "dialogs": [],
+                "decoPlacements": [],
+            }
+        try:
+            timed_info = apply_global_timed_events(
+                map_sid=sid,
+                map_title=title,
+                global_timed_events=(alignment.get("globalTimedEvents") or None),
+            )
+        except VanillaStockVictoryError as ex:
+            warnings.append(f"timed events omitted: {ex}")
+            timed_info = {
+                "briefingCount": 0,
+                "timedGrantCount": 0,
+                "omittedGaps": [str(ex)],
+                "notes": [str(ex)],
+                "quests": [],
+                "counters": [],
+                "dialogDocuments": [],
+            }
     except (VanillaStockVictoryError, KeyError, TypeError, ValueError) as ex:
         raise VanillaStockEmitError(str(ex)) from ex
     if len(chunks) < 4 or not isinstance(chunks[3], dict):
@@ -1526,6 +1706,7 @@ def build_vanilla_stock_map(
         "sourceLayers": summary.get("layers"),
         "stockCore": str(stock_core),
         "templateMap": str(template_map),
+        "warnings": warnings,
         "outputMap": str(out_map),
         "installedMap": str(installed_path) if installed_path else None,
         "substitutionTable": copied_table.manifest(),
@@ -1687,7 +1868,16 @@ def main_emit_cli(argv: list[str] | None = None) -> int:
     parser.add_argument("--h3m", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--stock-core", type=Path, required=DEFAULT_STOCK_CORE is None, default=DEFAULT_STOCK_CORE)
-    parser.add_argument("--template-map", type=Path, required=DEFAULT_STOCK_TEMPLATE_MAP is None, default=DEFAULT_STOCK_TEMPLATE_MAP)
+    parser.add_argument(
+        "--template-map",
+        type=Path,
+        default=DEFAULT_STOCK_TEMPLATE_MAP,
+        help=(
+            "Optional stock .map shell. Default: StreamingAssets/maps/"
+            f"{STOCK_TEMPLATE_MAP_BASENAME} beside Core.zip "
+            "(or STOCK_TEMPLATE_MAP env)."
+        ),
+    )
     parser.add_argument("--map-sid", type=str, default=None)
     parser.add_argument("--install-maps-dir", type=Path, default=None)
     parser.add_argument("--substitution-table", type=Path, default=DEFAULT_SUBSTITUTION_TABLE)
@@ -1701,7 +1891,16 @@ def main_emit_cli(argv: list[str] | None = None) -> int:
         install_maps_dir=args.install_maps_dir,
         substitution_table=args.substitution_table,
     )
-    print(json.dumps({"mapSid": manifest["mapSid"], "outputMap": manifest["outputMap"], "installedMap": manifest["installedMap"]}, indent=2))
+    warning_rows = list(manifest.get("warnings") or [])
+    summary = {
+        "mapSid": manifest["mapSid"],
+        "outputMap": manifest["outputMap"],
+        "installedMap": manifest["installedMap"],
+        "templateMap": manifest.get("templateMap"),
+        "warningCount": len(warning_rows),
+        "warnings": warning_rows,
+    }
+    print(json.dumps(summary, indent=2))
     return 0
 
 

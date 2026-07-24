@@ -60,7 +60,8 @@ def main(argv: list[str] | None = None) -> int:
         base=repo_root,
     )
     stock_core = _resolve(batch.get("stockCore") or DEFAULT_STOCK_CORE, base=repo_root)
-    template_map = _resolve(batch.get("templateMap") or DEFAULT_STOCK_TEMPLATE_MAP, base=repo_root)
+    template_raw = batch.get("templateMap") or DEFAULT_STOCK_TEMPLATE_MAP
+    template_map = _resolve(template_raw, base=repo_root) if template_raw else None
     install_dir = None
     if args.install:
         install_dir = _resolve(batch.get("installMapsDir") or DEFAULT_STOCK_MAPS_DIR, base=repo_root)

@@ -14,9 +14,12 @@ Expect to run into some issues, but this gives you a decent start without having
 4. When prompted, provide:
    - your `.h3m`
    - Your `HeroesOldenEra_Data/StreamingAssets/Core.zip`
-   - a stock template map such as `maps/Thirst_for_Power.map`
    - optional: your Olden `maps\` folder to auto-install the result
 5. Start Olden Era and open the scenario as a custom game.
+
+`Thirst_for_Power.map` is auto-detected beside `Core.zip` under `StreamingAssets/maps/`
+(every stock Olden install has it). Override only if needed via `-TemplateMap` /
+`--template-map` / `STOCK_TEMPLATE_MAP`.
 
 ### Example
 
@@ -26,7 +29,6 @@ Expect to run into some issues, but this gives you a decent start without having
   -MapSid "vanilla_stock_twins" `
   -OutDir ".\artifacts\twins" `
   -StockCore "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\Core.zip" `
-  -TemplateMap "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\maps\Thirst_for_Power.map" `
   -InstallMapsDir "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\maps"
 ```
 
@@ -34,7 +36,8 @@ Expect to run into some issues, but this gives you a decent start without having
 
 - Oceans are dried up, instead becoming pathable sand terrain at a reduced elevation.
 - Underground layers are simulated using extra large maps with sections separated by portals
-- Unsupported H3 objects or victory types stop with a clear error.
+- Unsupported H3 objects (or victory types with no Olden parallel) warn, omit or fall back
+  that piece, and still write the map. Warnings show in the CLI summary and manifest.
 - Maps with events will merge a text-only dialog overlays into `Core.zip`
   (a backup is created once). This means some events may break when the game is patched, until you run the utility again.
 
