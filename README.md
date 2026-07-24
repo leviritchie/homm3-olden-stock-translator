@@ -1,9 +1,9 @@
 # HoMM3 → stock Olden Era scenario translator
 
 Downloadable Windows utility that converts Heroes of Might and Magic III `.h3m`
-scenarios into Olden Era `.map` files. It is not possible to perfectly recreate 
-a HoMM3 map without modding, but this gives you a decent start that can be further 
-edited in the Olden Era editor.
+scenarios into Olden Era `.map` files. Buildings are substituted with equivalents (with sulfur notably becoming alchemical dust).
+Many buildings have different visit angles/sizes, so scenery is culled to create space when there isn't enough for a hero to navigate.
+Expect to run into some issues, but this gives you a decent start without having to recreate it by hand in the Olden Era editor.
 
 ## Installation
 
