@@ -1,16 +1,16 @@
-"""Calibrate stock SpawnsCreator budgets to H3 map neutral strength (OSS).
+"""Calibrate stock SpawnsCreator budgets to H3 map neutral strength.
 
-Formula (same shape as the private campaign translator):
+Formula matches campaign GE emit (``h3_random_monster_strength_model.json``):
 
     requestedValue = round_half_up(count_or_nominal * squadValue, 50)
 
-``squadValue`` is the **stock Core** native unit tier median (computed at runtime
-from the user's installed ``Core.zip``). Creature identity maps to an H3 tier via
-a public CRTRAITS-index→tier table — no Golden Era ``h3_`` economy rows are shipped.
+``squadValue`` comes from a baked Golden Era ``h3_`` unit snapshot so stock emit
+does not require GE Core at runtime. Stock SpawnsCreator spends that budget on
+native units; stock native tier medians are near the GE ``h3_`` scale.
 
-Regenerate the tier table from a private GE Core (optional maintainer tool)::
+Regenerate the snapshot with::
 
-    python -m vanilla_stock.stock_neutral_strength --write-creature-tiers
+    python -m vanilla_stock.stock_neutral_strength  # requires GE_CORE + monorepo surface_emit for regen only
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import statistics
 import zipfile
 from collections import defaultdict
@@ -25,10 +26,21 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+
+def _env_path(name: str) -> Path | None:
+    raw = os.environ.get(name)
+    return Path(raw) if raw else None
+
+
 STRENGTH_MODEL_PATH = Path(__file__).with_name("h3_neutral_strength_model.json")
+CAMPAIGN_STRENGTH_MODEL_PATH = Path(__file__).resolve().parents[1] / "h3_random_monster_strength_model.json"
+SURFACE_EMIT_PATH = _env_path("MONOREPO_SURFACE_EMIT") or (
+    Path(__file__).resolve().parents[1] / "approach_cell" / "surface_emit.py"
+)
+DEFAULT_GE_CORE = _env_path("GE_CORE")
+DEFAULT_STOCK_CORE = _env_path("STOCK_CORE")
 
 _MODEL_CACHE: dict[str, Any] | None = None
-_TIER_MEDIAN_CACHE: dict[tuple[str, float], dict[int, float]] = {}
 
 
 class StockNeutralStrengthError(ValueError):
@@ -72,83 +84,45 @@ def _nominal_counts(model: dict[str, Any]) -> dict[int, int]:
     return out
 
 
-def _creature_tiers(model: dict[str, Any]) -> dict[int, int]:
-    raw = model.get("creatureTypeTiers")
+def _tier_median_squad_values(model: dict[str, Any]) -> dict[int, float]:
+    raw = model.get("tierMedianSquadValuesFromGeH3")
     if not isinstance(raw, dict) or not raw:
-        raise StockNeutralStrengthError("strength model missing creatureTypeTiers")
-    out: dict[int, int] = {}
+        raise StockNeutralStrengthError("strength model missing tierMedianSquadValuesFromGeH3")
+    out: dict[int, float] = {}
     for key, value in raw.items():
-        ctype = int(key)
-        tier = int(value)
-        if tier < 1 or tier > 7:
-            raise StockNeutralStrengthError(f"invalid creature tier for type {ctype}: {tier}")
-        out[ctype] = tier
+        level = int(key)
+        if not isinstance(value, (int, float)) or float(value) <= 0:
+            raise StockNeutralStrengthError(f"invalid tier median squadValue for {key}: {value!r}")
+        out[level] = float(value)
     return out
 
 
-def stock_core_path_from_env() -> Path | None:
-    raw = os.environ.get("STOCK_CORE") or os.environ.get("OLDEN_STOCK_CORE")
-    if not raw:
-        return None
-    path = Path(raw)
-    return path if path.is_file() else None
-
-
-def stock_tier_median_squad_values(core_zip: Path) -> dict[int, float]:
-    key = (str(core_zip.resolve()), core_zip.stat().st_mtime)
-    cached = _TIER_MEDIAN_CACHE.get(key)
-    if cached is not None:
-        return dict(cached)
-    by_tier: dict[int, list[float]] = defaultdict(list)
-    with zipfile.ZipFile(core_zip) as core:
-        for name in core.namelist():
-            if not (name.startswith("DB/units/units_logics/") and name.endswith("_l.json")):
-                continue
-            doc = json.loads(core.read(name).decode("utf-8-sig"))
-            for row in doc.get("array") or []:
-                if not isinstance(row, dict):
-                    continue
-                unit_id = str(row.get("id") or "")
-                if not unit_id or unit_id.startswith("h3_"):
-                    continue
-                tier = row.get("tier")
-                squad_value = row.get("squadValue")
-                if isinstance(tier, int) and 1 <= tier <= 7 and isinstance(squad_value, (int, float)):
-                    by_tier[tier].append(float(squad_value))
-    missing = [tier for tier in range(1, 8) if tier not in by_tier]
-    if missing:
-        raise StockNeutralStrengthError(
-            f"stock Core.zip missing native unit squadValue medians for tier(s) {missing}: {core_zip}"
-        )
-    medians = {tier: float(statistics.median(values)) for tier, values in sorted(by_tier.items())}
-    _TIER_MEDIAN_CACHE[key] = medians
-    return dict(medians)
-
-
-def _resolve_tier_medians(
-    *,
-    model: dict[str, Any],
-    stock_core: Path | None,
-) -> dict[int, float]:
-    core = stock_core or stock_core_path_from_env()
-    if core is not None:
-        return stock_tier_median_squad_values(core)
-    baked = model.get("tierMedianSquadValuesFromStockNative")
-    if not isinstance(baked, dict) or not baked:
-        raise StockNeutralStrengthError(
-            "no STOCK_CORE / stock_core argument and strength model has no "
-            "tierMedianSquadValuesFromStockNative fallback"
-        )
-    out: dict[int, float] = {}
-    for key, value in baked.items():
-        tier = int(key)
-        if not isinstance(value, (int, float)) or float(value) <= 0:
-            raise StockNeutralStrengthError(f"invalid baked stock median for tier {key}: {value!r}")
-        out[tier] = float(value)
+def _creature_squad_rows(model: dict[str, Any]) -> dict[int, dict[str, Any]]:
+    raw = model.get("creatureTypeSquadValuesFromGe")
+    if not isinstance(raw, dict) or not raw:
+        raise StockNeutralStrengthError("strength model missing creatureTypeSquadValuesFromGe")
+    out: dict[int, dict[str, Any]] = {}
+    for key, row in raw.items():
+        if not isinstance(row, dict):
+            raise StockNeutralStrengthError(f"creature squad row must be object for {key}")
+        ctype = int(key)
+        squad_value = row.get("squadValue")
+        tier = row.get("tier")
+        if not isinstance(squad_value, (int, float)) or float(squad_value) <= 0:
+            raise StockNeutralStrengthError(f"invalid creature squadValue for type {ctype}: {squad_value!r}")
+        if not isinstance(tier, int) or tier < 1:
+            raise StockNeutralStrengthError(f"invalid creature tier for type {ctype}: {tier!r}")
+        out[ctype] = {
+            "unitSid": str(row.get("unitSid") or ""),
+            "squadValue": float(squad_value),
+            "tier": int(tier),
+        }
     return out
 
 
 def h3_random_monster_level(entity: dict[str, Any]) -> int | None:
+    """Return AVWmonN level, or None when animation is not a digit-level random template."""
+
     animation = str(entity.get("templateAnimation") or "")
     prefix = "AVWmon"
     suffix = ".def"
@@ -161,6 +135,8 @@ def h3_random_monster_level(entity: dict[str, Any]) -> int | None:
 
 
 def creature_type_for_monster_entity(entity: dict[str, Any]) -> int | None:
+    """Concrete H3 monster object (id 54): subtype is CRTRAITS creature index."""
+
     object_id = entity.get("templateObjectId")
     subtype = entity.get("templateSubtype")
     if object_id == 54 and isinstance(subtype, int) and subtype >= 0:
@@ -172,39 +148,51 @@ def stock_random_squad_requested_value(
     entity: dict[str, Any],
     *,
     model: dict[str, Any] | None = None,
-    stock_core: Path | None = None,
 ) -> float:
+    """SpawnsCreator budget for an H3 monster tile → stock ``random-squad``."""
+
     strength = model or load_strength_model()
     rounding = float(strength["requestedValueRounding"])
     nominal = _nominal_counts(strength)
-    tiers = _creature_tiers(strength)
-    medians = _resolve_tier_medians(model=strength, stock_core=stock_core)
+    tier_medians = _tier_median_squad_values(strength)
+    creatures = _creature_squad_rows(strength)
     count = int(entity.get("count") or 0)
     source_key = entity.get("sourceKey") or entity.get("key")
 
     level = h3_random_monster_level(entity)
     if level is not None:
-        if level not in nominal or level not in medians:
-            raise StockNeutralStrengthError(f"unsupported AVWmon level {level} for {source_key}")
+        if level not in nominal or level not in tier_medians:
+            raise StockNeutralStrengthError(
+                f"unsupported AVWmon level {level} for {source_key}"
+            )
+        squad_value = tier_medians[level]
         effective_count = count if count > 0 else nominal[level]
-        return rounded_requested_value(medians[level] * effective_count, rounding=rounding)
+        return rounded_requested_value(squad_value * effective_count, rounding=rounding)
 
     creature_type = creature_type_for_monster_entity(entity)
     if creature_type is not None:
-        tier = tiers.get(creature_type)
-        if tier is None:
+        row = creatures.get(creature_type)
+        if row is None:
             raise StockNeutralStrengthError(
-                f"no creatureTypeTiers entry for creatureType={creature_type} at {source_key}"
+                f"no baked squadValue for concrete creatureType={creature_type} at {source_key}"
             )
-        if tier not in medians:
-            raise StockNeutralStrengthError(f"missing stock median for tier {tier} at {source_key}")
-        effective_count = count if count > 0 else nominal[tier]
-        return rounded_requested_value(medians[tier] * effective_count, rounding=rounding)
+        effective_count = count if count > 0 else nominal[int(row["tier"])]
+        return rounded_requested_value(float(row["squadValue"]) * effective_count, rounding=rounding)
 
+    if count > 0:
+        # Typed animation without object-id 54 (rare stand-ins): budget by T1 median × count.
+        # Prefer failing closed once the animation is recognized as a concrete DEF name.
+        animation = str(entity.get("templateAnimation") or "")
+        raise StockNeutralStrengthError(
+            f"cannot calibrate concrete monster strength for {source_key}: "
+            f"objectId={entity.get('templateObjectId')!r} subtype={entity.get('templateSubtype')!r} "
+            f"animation={animation!r} count={count}"
+        )
+
+    # Last resort for untyped empties should not happen on real H3M monsters.
     raise StockNeutralStrengthError(
         f"cannot calibrate monster strength for {source_key}: "
-        f"animation={entity.get('templateAnimation')!r} objectId={entity.get('templateObjectId')!r} "
-        f"subtype={entity.get('templateSubtype')!r} count={count}"
+        f"animation={entity.get('templateAnimation')!r} count={count}"
     )
 
 
@@ -212,98 +200,182 @@ def stock_guard_requested_value(
     stacks: list[dict[str, int]],
     *,
     model: dict[str, Any] | None = None,
-    stock_core: Path | None = None,
 ) -> float:
+    """SpawnsCreator budget for map-event guard stacks (sum of count×creature squadValue)."""
+
     strength = model or load_strength_model()
     rounding = float(strength["requestedValueRounding"])
-    tiers = _creature_tiers(strength)
-    medians = _resolve_tier_medians(model=strength, stock_core=stock_core)
+    creatures = _creature_squad_rows(strength)
     total = 0.0
     for stack in stacks:
         creature_type = int(stack["creatureType"])
         count = int(stack["count"])
         if count <= 0:
             continue
-        tier = tiers.get(creature_type)
-        if tier is None:
+        row = creatures.get(creature_type)
+        if row is None:
             raise StockNeutralStrengthError(
-                f"no creatureTypeTiers entry for guard creatureType={creature_type} stacks={stacks!r}"
+                f"no baked squadValue for guard creatureType={creature_type} stacks={stacks!r}"
             )
-        total += medians[tier] * count
+        total += float(row["squadValue"]) * count
     if total <= 0:
         raise StockNeutralStrengthError(f"guard requestedValue must be positive; stacks={stacks!r}")
     return rounded_requested_value(total, rounding=rounding)
 
 
-def build_strength_model_from_stock_core(
+def _parse_creature_type_unit_map(surface_emit_text: str) -> dict[int, str]:
+    match = re.search(
+        r"MAP_EVENT_GUARD_UNIT_BY_CREATURE_TYPE: dict\[int, str\] = \{([\s\S]*?)\n\}",
+        surface_emit_text,
+    )
+    if match is None:
+        raise StockNeutralStrengthError("MAP_EVENT_GUARD_UNIT_BY_CREATURE_TYPE not found in surface_emit.py")
+    mapping: dict[int, str] = {}
+    for line in match.group(1).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        row = re.match(r'(\d+)\s*:\s*"([^"]+)"', stripped)
+        if row is None:
+            continue
+        mapping[int(row.group(1))] = row.group(2)
+    if not mapping:
+        raise StockNeutralStrengthError("parsed empty MAP_EVENT_GUARD_UNIT_BY_CREATURE_TYPE")
+    return mapping
+
+
+def _unit_squad_index(core_zip: Path) -> dict[str, dict[str, float | int]]:
+    index: dict[str, dict[str, float | int]] = {}
+    with zipfile.ZipFile(core_zip) as core:
+        for name in core.namelist():
+            if not (name.startswith("DB/units/units_logics/") and name.endswith("_l.json")):
+                continue
+            doc = json.loads(core.read(name).decode("utf-8-sig"))
+            for row in doc.get("array") or []:
+                if not isinstance(row, dict):
+                    continue
+                unit_id = str(row.get("id") or "")
+                squad_value = row.get("squadValue")
+                tier = row.get("tier")
+                if not unit_id or not isinstance(squad_value, (int, float)) or not isinstance(tier, int):
+                    continue
+                index[unit_id] = {"squadValue": float(squad_value), "tier": int(tier)}
+    if not index:
+        raise StockNeutralStrengthError(f"no unit squadValue rows in {core_zip}")
+    return index
+
+
+def regenerate_strength_model(
     *,
-    stock_core: Path,
-    creature_tiers: dict[int, int],
-    nominal: dict[int, int],
-    rounding: float = 50.0,
+    ge_core: Path | None = DEFAULT_GE_CORE,
+    stock_core: Path | None = DEFAULT_STOCK_CORE,
+    out_path: Path = STRENGTH_MODEL_PATH,
+    surface_emit_path: Path | None = SURFACE_EMIT_PATH,
+    campaign_model_path: Path = CAMPAIGN_STRENGTH_MODEL_PATH,
 ) -> dict[str, Any]:
-    medians = stock_tier_median_squad_values(stock_core)
-    budgets = {str(tier): float(medians[tier]) * nominal[tier] for tier in sorted(nominal)}
-    return {
+    """Rebuild ``h3_neutral_strength_model.json`` from GE Core + campaign nominal counts."""
+
+    if ge_core is None or not ge_core.is_file():
+        raise StockNeutralStrengthError("GE Core.zip not found (set GE_CORE or pass ge_core=...)")
+    if stock_core is None or not stock_core.is_file():
+        raise StockNeutralStrengthError("stock Core.zip not found (set STOCK_CORE or pass stock_core=...)")
+    if not campaign_model_path.is_file():
+        raise StockNeutralStrengthError(f"campaign strength model not found: {campaign_model_path}")
+    if surface_emit_path is None or not surface_emit_path.is_file():
+        raise StockNeutralStrengthError(
+            "surface_emit.py with MAP_EVENT_GUARD_UNIT_BY_CREATURE_TYPE not found "
+            "(set MONOREPO_SURFACE_EMIT to the private monorepo file for regen)"
+        )
+
+    campaign = json.loads(campaign_model_path.read_text(encoding="utf-8"))
+    nominal_raw = campaign.get("nominalH3RandomStackCountsByLevel")
+    if not isinstance(nominal_raw, dict):
+        raise StockNeutralStrengthError("campaign model missing nominalH3RandomStackCountsByLevel")
+    nominal = {int(key): int(value) for key, value in nominal_raw.items()}
+    rounding = float(campaign.get("requestedValueRounding") or 50.0)
+
+    ge_index = _unit_squad_index(ge_core)
+    stock_index = _unit_squad_index(stock_core)
+    creature_map = _parse_creature_type_unit_map(surface_emit_path.read_text(encoding="utf-8"))
+
+    creature_rows: dict[str, dict[str, Any]] = {}
+    for creature_type, unit_sid in sorted(creature_map.items()):
+        info = ge_index.get(unit_sid)
+        if info is None:
+            raise StockNeutralStrengthError(
+                f"GE Core missing squadValue for mapped unit {unit_sid} (creatureType={creature_type})"
+            )
+        creature_rows[str(creature_type)] = {
+            "unitSid": unit_sid,
+            "squadValue": float(info["squadValue"]),
+            "tier": int(info["tier"]),
+        }
+
+    ge_by_tier: dict[int, list[float]] = defaultdict(list)
+    for unit_id, info in ge_index.items():
+        if unit_id.startswith("h3_") and int(info["tier"]) in nominal:
+            ge_by_tier[int(info["tier"])].append(float(info["squadValue"]))
+    stock_by_tier: dict[int, list[float]] = defaultdict(list)
+    for unit_id, info in stock_index.items():
+        if not unit_id.startswith("h3_") and int(info["tier"]) in nominal:
+            stock_by_tier[int(info["tier"])].append(float(info["squadValue"]))
+
+    missing_ge = sorted(set(nominal) - set(ge_by_tier))
+    if missing_ge:
+        raise StockNeutralStrengthError(f"GE Core missing h3_ tiers for medians: {missing_ge}")
+
+    tier_med_ge = {str(tier): float(statistics.median(values)) for tier, values in sorted(ge_by_tier.items())}
+    tier_med_stock = {
+        str(tier): float(statistics.median(values)) for tier, values in sorted(stock_by_tier.items())
+    }
+    budgets = {
+        str(tier): float(tier_med_ge[str(tier)]) * nominal[tier]
+        for tier in sorted(nominal)
+    }
+
+    payload: dict[str, Any] = {
         "schema": "vanilla_stock.h3_neutral_strength_model.v1",
-        "model": "h3_count_x_stock_tier_median_squadValue_v1",
-        "sourceStatus": "generated_from_stock_core_native_unit_medians",
+        "model": "h3_count_x_ge_h3_squadValue_v1",
+        "sourceStatus": "generated_artifact_validated_against_ge_core_h3_unit_rows",
         "generatedDate": str(date.today()),
         "sourceNote": (
-            "requestedValue = round_half_up(count_or_nominal * stock_native_tier_median_squadValue, 50). "
-            "creatureTypeTiers is public H3 CRTRAITS index→tier knowledge. "
-            "At emit time, prefer live STOCK_CORE medians over the baked snapshot. "
-            "Do not bake NeutralsDifficulty into requestedValue."
+            "Matches campaign GE formula: requestedValue = round_half_up(count_or_nominal * squadValue, 50). "
+            "squadValue comes from Golden Era Core.zip h3_ unit rows (ported H3 strength in Olden value space). "
+            "Stock SpawnsCreator fills native units into that budget; stock native tier medians are near h3_ medians. "
+            "Do not bake NeutralsDifficulty into requestedValue (isIgnoreMultiply / runtime multiply)."
         ),
-        "nominalH3RandomStackCountsByLevel": {str(k): v for k, v in sorted(nominal.items())},
-        "requestedValueRounding": float(rounding),
-        "tierMedianSquadValuesFromStockNative": {str(k): v for k, v in sorted(medians.items())},
+        "nominalH3RandomStackCountsByLevel": {str(key): value for key, value in sorted(nominal.items())},
+        "requestedValueRounding": rounding,
+        "tierMedianSquadValuesFromGeH3": tier_med_ge,
+        "tierMedianSquadValuesFromStockNative": tier_med_stock,
         "randomTierNominalBudgets": budgets,
-        "creatureTypeTiers": {str(k): v for k, v in sorted(creature_tiers.items())},
+        "creatureTypeSquadValuesFromGe": creature_rows,
     }
+    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    global _MODEL_CACHE
+    _MODEL_CACHE = None
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--stock-core",
-        type=Path,
-        default=Path(os.environ["STOCK_CORE"]) if os.environ.get("STOCK_CORE") else None,
-    )
+    parser.add_argument("--ge-core", type=Path, default=DEFAULT_GE_CORE)
+    parser.add_argument("--stock-core", type=Path, default=DEFAULT_STOCK_CORE)
     parser.add_argument("--out", type=Path, default=STRENGTH_MODEL_PATH)
-    parser.add_argument(
-        "--creature-tiers-from",
-        type=Path,
-        help="Optional JSON with creatureTypeTiers (or full prior model) to preserve tier map",
-    )
     args = parser.parse_args(argv)
-    if args.stock_core is None or not args.stock_core.is_file():
-        raise SystemExit("pass --stock-core or set STOCK_CORE to stock Olden Core.zip")
-
-    if args.creature_tiers_from and args.creature_tiers_from.is_file():
-        prior = json.loads(args.creature_tiers_from.read_text(encoding="utf-8"))
-        tiers_raw = prior.get("creatureTypeTiers") or {
-            k: v["tier"] for k, v in (prior.get("creatureTypeSquadValuesFromGe") or {}).items()
-        }
-        creature_tiers = {int(k): int(v if not isinstance(v, dict) else v["tier"]) for k, v in tiers_raw.items()}
-    else:
-        creature_tiers = {int(k): int(v) for k, v in load_strength_model()["creatureTypeTiers"].items()}
-
-    campaign = Path(__file__).resolve().parents[1] / "h3_random_monster_strength_model.json"
-    nominal_doc = json.loads(campaign.read_text(encoding="utf-8"))
-    nominal = {int(k): int(v) for k, v in nominal_doc["nominalH3RandomStackCountsByLevel"].items()}
-    payload = build_strength_model_from_stock_core(
-        stock_core=args.stock_core,
-        creature_tiers=creature_tiers,
-        nominal=nominal,
-        rounding=float(nominal_doc.get("requestedValueRounding") or 50.0),
+    payload = regenerate_strength_model(ge_core=args.ge_core, stock_core=args.stock_core, out_path=args.out)
+    print(
+        json.dumps(
+            {
+                "out": str(args.out),
+                "creatureTypes": len(payload["creatureTypeSquadValuesFromGe"]),
+                "randomTierNominalBudgets": payload["randomTierNominalBudgets"],
+            },
+            indent=2,
+        )
     )
-    args.out.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    global _MODEL_CACHE
-    _MODEL_CACHE = None
-    print(json.dumps({"out": str(args.out), "budgets": payload["randomTierNominalBudgets"]}, indent=2))
     return 0
 
 

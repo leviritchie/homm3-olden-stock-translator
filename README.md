@@ -49,11 +49,14 @@ homm3-olden-stock-map --h3m Twins.h3m --out-dir ./artifacts/twins --map-sid vani
 
 Random and typed neutrals are budgeted for Olden `propRandomSquads.requestedValue` as:
 
-`round_half_up(H3_count_or_nominal × stock_tier_median_squadValue, 50)`
+`round_half_up(H3_count_or_nominal × squadValue, 50)`
 
-Tier medians are read from your stock `Core.zip` when `STOCK_CORE` is set (preferred).
-A baked stock-native snapshot ships for offline reference. Creature index→tier is
-public HoMM3 CRTRAITS knowledge; Golden Era `h3_` unit economy rows are **not** shipped.
+`squadValue` comes from a **baked snapshot of Golden Era `h3_` unit economy numbers**
+(ported H3 strength in Olden value space). Those are balance constants, not game
+assets. Stock SpawnsCreator still fills the budget with **stock** native units.
+
+Regenerating the snapshot (maintainers only) needs a local GE `Core.zip` and the
+private monorepo creature-type map via `GE_CORE` + `MONOREPO_SURFACE_EMIT`.
 
 ## Limits (fail-closed)
 
