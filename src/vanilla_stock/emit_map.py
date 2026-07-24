@@ -1509,6 +1509,7 @@ def build_vanilla_stock_map(
     try:
         victory_info = apply_victory_contract(
             header=scenario_header,
+            map_sid=sid,
             map_title=title,
             meta=meta,
             map_data=map_data,
@@ -1621,8 +1622,10 @@ def build_vanilla_stock_map(
     all_dialog_docs = list(event_info.get("dialogDocuments") or []) + list(
         timed_info.get("dialogDocuments") or []
     )
+    loc_tokens = list(victory_info.get("locTokens") or [])
     optional_overlay_dir: Path | None = None
     core_dialog_install_reports: list[dict[str, Any]] = []
+    core_loc_install_reports: list[dict[str, Any]] = []
     if all_dialog_docs:
         optional_overlay_dir = out_dir / "optional_core_overlay_for_events"
         for doc_row in all_dialog_docs:
@@ -1643,22 +1646,34 @@ def build_vanilla_stock_map(
             },
         )
 
-    if optional_overlay_dir is not None:
-        import sys as _sys
+    tools_dir = Path(__file__).resolve().parents[2] / "tools"
+    import sys as _sys
 
-        tools_dir = Path(__file__).resolve().parents[2] / "tools"
-        if str(tools_dir) not in _sys.path:
-            _sys.path.insert(0, str(tools_dir))
+    if str(tools_dir) not in _sys.path:
+        _sys.path.insert(0, str(tools_dir))
+
+    cores_to_patch = [stock_core]
+    if install_maps_dir is not None:
+        candidate = install_maps_dir.parent / "Core.zip"
+        if candidate.is_file() and candidate.resolve() != stock_core.resolve():
+            cores_to_patch.append(candidate)
+
+    if optional_overlay_dir is not None:
         from install_vanilla_stock_event_dialog_overlay import install_dialog_overlay
 
-        cores_to_patch = [stock_core]
-        if install_maps_dir is not None:
-            candidate = install_maps_dir.parent / "Core.zip"
-            if candidate.is_file() and candidate.resolve() != stock_core.resolve():
-                cores_to_patch.append(candidate)
         for core_path in cores_to_patch:
             core_dialog_install_reports.append(
                 install_dialog_overlay(overlay_dir=optional_overlay_dir, core_zip=core_path)
+            )
+
+    if loc_tokens:
+        loc_tokens_path = out_dir / f"{sid}.custom_maps_loc_tokens.json"
+        write_json(loc_tokens_path, {"locTokens": loc_tokens})
+        from install_vanilla_stock_custom_maps_loc import install_custom_maps_loc
+
+        for core_path in cores_to_patch:
+            core_loc_install_reports.append(
+                install_custom_maps_loc(core_zip=core_path, tokens=loc_tokens)
             )
 
     out_map = out_dir / "maps" / f"{sid}.map"
@@ -1823,6 +1838,8 @@ def build_vanilla_stock_map(
         "coreOverlayEmitted": False,
         "coreOverlayOptionalEventsOnly": bool(all_dialog_docs),
         "coreDialogInstallReports": core_dialog_install_reports,
+        "coreLocInstallReports": core_loc_install_reports,
+        "questLocTokens": loc_tokens,
         "proofBoundary": (
             "generated_artifact_stock_sid_tile_water_gate_face_ground_truth_validated_"
             "runtime_unvalidated"

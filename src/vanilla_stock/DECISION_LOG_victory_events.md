@@ -6,7 +6,7 @@ Scope: stock Olden maps only (`vanilla_stock` + shared `h3m_format` header decod
 
 1. **Header victory/loss decode** lives in `h3m_format.decode_h3m_scenario_header`, VCMI-shaped (AB empty-player skip 6+6, factionsBytes=2, heroesBytes=20). Proven on Dungeon Keeper (`WINSTANDARD`) and Treasure Hunt (`TAKEMINES`, `allow_normal_win=false`).
 2. **Template leftovers**: always clear `settings.mapWinConditions`, Thirst quest/counters, and related propEntity/action lists before intentional emit.
-3. **WINSTANDARD** → `DefeatAllEnemiesEnabled=true` + Thirst-style `PlayerDefeated` (1-based side ids) → `GameVictory`. Quest name/desc are **inline English**, not Loc SIDs.
+3. **WINSTANDARD** → `DefeatAllEnemiesEnabled=true` + Thirst-style `PlayerDefeated` (1-based side ids) → `GameVictory`. Quest name/desc are **LocKit SIDs** (`{mapSid}_quest_*`) with English text merged into every `Lang/*/texts/customMaps.json` via `tools/install_vanilla_stock_custom_maps_loc.py` (inline English shows as `LOC:` in-game).
 4. **TAKEMINES** → Glittering-style `propEntities` (`mine1..N`) + `ObjectCaptureEntity` / `ObjectLose` + `mines_owned` counter → `GameVictory` at `N`. `DefeatAllEnemiesEnabled` follows H3 `allow_normal_win` (false on Treasure Hunt).
 5. **Fail-closed** if emitted mine count ≠ source H3M mine/abandoned-mine count. Abandoned mines map to stock `campaign_M2_empty_mine`. Sulfur mines keep existing stock stand-in `alchemy_lab` (no `mine_sulfur` in stock Core).
 6. **Map EVENT parity (2026-07-21, host/deco/reward fix 2026-07-22)** matches the campaign Dialog/`GiveRes` contract on stock hosts:
@@ -16,6 +16,7 @@ Scope: stock Olden maps only (`vanilla_stock` + shared `h3m_format` header decod
    - Mapped H3 artifacts (exact stock name match, e.g. id 116 → `endless_bag_artifact`) spawn via `SpawnMapObject` on visit. Unmapped artifacts and **mana** stay named omit gaps (no interacting-hero `ChangeManaHero` / `AddMana` donor).
    - Negative resource deltas use stock-proven `RemoveRes` (not a fictional TakeRes).
    - Dialog SIDs use `localization:false` under `optional_core_overlay_for_events/`; emit auto-merges into stock (+ install-target) `Core.zip` via `tools/install_vanilla_stock_event_dialog_overlay.py`.
+   - Quest LocKit tokens are always merged into `customMaps.json` language packs on emit (same Core targets as dialog overlay).
 7. **Global timed events**: H3M tail briefings → StartTurn Dialog; resource grants → StartTurn + CED recurrence with GiveRes/RemoveRes.
 8. **Event pilot**: Twins (`expectMapEventCount: 6`) — 3 unguarded / 3 guarded, day-1 Intro briefing, Endless Bag spawn on one event, remaining art/mana gaps explicit.
 

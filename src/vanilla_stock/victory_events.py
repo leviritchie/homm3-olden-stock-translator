@@ -109,12 +109,21 @@ def _player_defeated_condition(player_index: int) -> dict[str, Any]:
     }
 
 
+def _loc_token(sid: str, text: str) -> dict[str, str]:
+    return {"sid": sid, "text": text}
+
+
 def build_winstandard_quest_script(
     *,
+    map_sid: str,
     map_title: str,
     header: dict[str, Any],
 ) -> dict[str, Any]:
-    """Thirst-style: when every other playable side is defeated → GameVictory."""
+    """Thirst-style: when every other playable side is defeated → GameVictory.
+
+    Quest name/desc fields are LocKit SIDs (customMaps.json), matching stock maps.
+    Inline English here shows in-game as ``LOC:<text>``.
+    """
 
     playable = playable_player_indices(header)
     humans = human_capable_player_indices(header)
@@ -124,6 +133,13 @@ def build_winstandard_quest_script(
         raise VanillaStockVictoryError(
             "WINSTANDARD quest requires at least two playable H3 players to defeat"
         )
+
+    name_sid = f"{map_sid}_quest_name"
+    desc_sid = f"{map_sid}_quest_desc"
+    sub_name_sid = f"{map_sid}_sub_defeat_all"
+    name_text = "Defeat all enemies"
+    desc_text = f"Capture all enemy towns and defeat all enemy heroes on {map_title}."
+    sub_name_text = "Defeat all enemies"
 
     subquests: list[dict[str, Any]] = []
     for human in humans:
@@ -136,7 +152,7 @@ def build_winstandard_quest_script(
                 "sid": f"MainQuest_defeat_as_p{human}",
                 "activeOnStart": True,
                 "hidden": False,
-                "name": "Defeat all enemies",
+                "name": sub_name_sid,
                 "desc": "",
                 "comment": f"WINSTANDARD: player {human} wins when other playable sides are defeated",
                 "triggers": [
@@ -162,21 +178,28 @@ def build_winstandard_quest_script(
         "comment": "vanilla_stock WINSTANDARD → DefeatAll + PlayerDefeated → GameVictory",
         "main": True,
         "hidden": False,
-        "name": "Defeat all enemies",
-        "desc": f"Capture all enemy towns and defeat all enemy heroes on {map_title}.",
+        "name": name_sid,
+        "desc": desc_sid,
         "sharing": "Clone",
         "subQuests": subquests,
     }
     return {
         "counters": [],
         "quests": [quest],
-        "objectiveText": quest["desc"],
+        "objectiveText": desc_text,
+        "objectiveLocSid": desc_sid,
         "defeatAllEnemiesEnabled": True,
+        "locTokens": [
+            _loc_token(name_sid, name_text),
+            _loc_token(desc_sid, desc_text),
+            _loc_token(sub_name_sid, sub_name_text),
+        ],
     }
 
 
 def build_takemines_quest_script(
     *,
+    map_sid: str,
     map_title: str,
     mine_entity_sids: list[str],
     allow_normal_victory: bool,
@@ -252,21 +275,28 @@ def build_takemines_quest_script(
         "conditionsLogic": "And",
     }
 
+    name_sid = f"{map_sid}_quest_name"
+    desc_sid = f"{map_sid}_quest_desc"
+    track_sid = f"{map_sid}_sub_capture_mines"
+    hold_sid = f"{map_sid}_sub_hold_mines"
+    name_text = "Flag all mines"
+    desc_text = f"Control all {needed} mines on {map_title}."
+
     quest = {
         "sid": MAIN_QUEST_SID,
         "activeOnStart": True,
         "comment": "vanilla_stock TAKEMINES → ObjectCaptureEntity/ObjectLose counter → GameVictory",
         "main": True,
         "hidden": False,
-        "name": "Flag all mines",
-        "desc": f"Control all {needed} mines on {map_title}.",
+        "name": name_sid,
+        "desc": desc_sid,
         "sharing": "Clone",
         "subQuests": [
             {
                 "sid": "MainQuest_mines_track",
                 "activeOnStart": True,
                 "hidden": False,
-                "name": "Capture mines",
+                "name": track_sid,
                 "desc": "",
                 "comment": "",
                 "triggers": capture_triggers + lose_triggers,
@@ -275,7 +305,7 @@ def build_takemines_quest_script(
                 "sid": "MainQuest_mines_victory",
                 "activeOnStart": True,
                 "hidden": False,
-                "name": "Hold every mine",
+                "name": hold_sid,
                 "desc": "",
                 "comment": "",
                 "triggers": [victory_trigger],
@@ -290,16 +320,24 @@ def build_takemines_quest_script(
             )
         ],
         "quests": [quest],
-        "objectiveText": quest["desc"],
+        "objectiveText": desc_text,
+        "objectiveLocSid": desc_sid,
         "defeatAllEnemiesEnabled": bool(allow_normal_victory),
         "mineEntityCount": needed,
         "mineEntitySids": list(mine_entity_sids),
+        "locTokens": [
+            _loc_token(name_sid, name_text),
+            _loc_token(desc_sid, desc_text),
+            _loc_token(track_sid, "Capture mines"),
+            _loc_token(hold_sid, "Hold every mine"),
+        ],
     }
 
 
 def apply_victory_contract(
     *,
     header: dict[str, Any],
+    map_sid: str,
     map_title: str,
     meta: dict[str, Any],
     map_data: dict[str, Any],
@@ -316,11 +354,15 @@ def apply_victory_contract(
     fallback_warning: str | None = None
 
     if victory_type == h3m.VICTORY_WINSTANDARD:
-        built = build_winstandard_quest_script(map_title=map_title, header=header)
+        built = build_winstandard_quest_script(
+            map_sid=map_sid, map_title=map_title, header=header
+        )
         mode = "WINSTANDARD"
     elif victory_type == h3m.VICTORY_TAKEMINES:
         if source_mine_record_count <= 0 or len(emitted_mine_object_ids) != source_mine_record_count:
-            built = build_winstandard_quest_script(map_title=map_title, header=header)
+            built = build_winstandard_quest_script(
+                map_sid=map_sid, map_title=map_title, header=header
+            )
             mode = "WINSTANDARD_FALLBACK"
             fallback_warning = (
                 f"TAKEMINES victory incomplete "
@@ -335,6 +377,7 @@ def apply_victory_contract(
                 )
             allow_normal = bool(victory.get("allowNormalVictory"))
             built = build_takemines_quest_script(
+                map_sid=map_sid,
                 map_title=map_title,
                 mine_entity_sids=entity_sids,
                 allow_normal_victory=allow_normal,
@@ -342,7 +385,9 @@ def apply_victory_contract(
             mode = "TAKEMINES"
     else:
         # Unsupported special victory → still emit a playable DefeatAll map.
-        built = build_winstandard_quest_script(map_title=map_title, header=header)
+        built = build_winstandard_quest_script(
+            map_sid=map_sid, map_title=map_title, header=header
+        )
         mode = "WINSTANDARD_FALLBACK"
         fallback_warning = (
             f"unsupported victory condition {victory_name} ({victory_type}); "
@@ -351,7 +396,8 @@ def apply_victory_contract(
 
     start_settings = meta.setdefault("startSettings", {})
     start_settings["DefeatAllEnemiesEnabled"] = bool(built["defeatAllEnemiesEnabled"])
-    meta["displayWinCondition"] = str(built.get("objectiveText") or "")
+    # displayWinCondition is also resolved through LocKit (not plain English).
+    meta["displayWinCondition"] = str(built.get("objectiveLocSid") or "")
     map_data["mapDesc"] = meta.get("desc") or map_data.get("mapDesc") or ""
 
     result = {
@@ -361,10 +407,12 @@ def apply_victory_contract(
         "lossName": (header.get("loss") or {}).get("name"),
         "defeatAllEnemiesEnabled": built["defeatAllEnemiesEnabled"],
         "objectiveText": built.get("objectiveText"),
+        "objectiveLocSid": built.get("objectiveLocSid"),
         "counters": built.get("counters") or [],
         "quests": built.get("quests") or [],
         "mineEntityCount": built.get("mineEntityCount") or 0,
         "mineEntitySids": built.get("mineEntitySids"),
+        "locTokens": list(built.get("locTokens") or []),
     }
     if mode == "WINSTANDARD_FALLBACK":
         result["warning"] = fallback_warning

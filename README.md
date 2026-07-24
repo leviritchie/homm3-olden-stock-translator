@@ -41,6 +41,9 @@ verified). There is no custom translator `.exe`.
 - Underground layers are simulated using extra large maps with sections separated by portals
 - Unsupported H3 objects (or victory types with no Olden parallel) warn, omit or fall back
   that piece, and still write the map. Warnings show in the CLI/GUI log and manifest.
+- Quest titles/descriptions are LocKit SIDs; convert merges their English text into
+  `Core.zip` `Lang/*/texts/customMaps.json` (a backup is created once). Restart Olden
+  after convert if it was already running so Loc packs reload.
 - Maps with events will merge a text-only dialog overlays into `Core.zip`
   (a backup is created once). This means some events may break when the game is patched, until you run the utility again.
 

@@ -899,8 +899,17 @@ def validate_vanilla_stock_map(
         name = (main_quests[0] or {}).get("name") if main_quests else None
         desc = (main_quests[0] or {}).get("desc") if main_quests else None
         for field_name, value in (("name", name), ("desc", desc)):
-            if isinstance(value, str) and value.startswith(("tfp_", "gs_", "Loc:")):
-                errors.append(f"WINSTANDARD quest {field_name} looks like a ghost Loc SID: {value!r}")
+            if not isinstance(value, str) or not value:
+                errors.append(f"WINSTANDARD quest {field_name} missing LocKit SID")
+                continue
+            if " " in value or value.startswith("LOC:"):
+                errors.append(
+                    f"WINSTANDARD quest {field_name} must be a LocKit SID, not inline text: {value!r}"
+                )
+            elif expect_map_sid and not value.startswith(f"{expect_map_sid}_"):
+                errors.append(
+                    f"WINSTANDARD quest {field_name} Loc SID {value!r} must start with {expect_map_sid}_"
+                )
     elif victory_mode == "TAKEMINES":
         allow_normal = None
         if manifest_path is not None and manifest_path.is_file():
@@ -933,8 +942,14 @@ def validate_vanilla_stock_map(
                 if token not in blob:
                     errors.append(f"TAKEMINES MainQuest missing {token}")
         name = (main_quests[0] or {}).get("name") if main_quests else None
-        if isinstance(name, str) and name.startswith(("tfp_", "gs_", "Loc:")):
-            errors.append(f"TAKEMINES quest name looks like a ghost Loc SID: {name!r}")
+        if not isinstance(name, str) or not name:
+            errors.append("TAKEMINES quest name missing LocKit SID")
+        elif " " in name or name.startswith("LOC:"):
+            errors.append(f"TAKEMINES quest name must be a LocKit SID, not inline text: {name!r}")
+        elif expect_map_sid and not name.startswith(f"{expect_map_sid}_"):
+            errors.append(
+                f"TAKEMINES quest name Loc SID {name!r} must start with {expect_map_sid}_"
+            )
 
     if map_event_count is not None:
         events_manifest: dict[str, Any] = {}
