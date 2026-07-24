@@ -19,8 +19,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/TODO/homm3-olden-stock-translator"
-Repository = "https://github.com/TODO/homm3-olden-stock-translator"
+Homepage = "https://github.com/leviritchie/homm3-olden-stock-translator"
+Repository = "https://github.com/leviritchie/homm3-olden-stock-translator"
 
 [project.scripts]
 homm3-olden-stock-map = "vanilla_stock.emit_map:main_emit_cli"
