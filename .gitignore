@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+
+# Generated maps / local runs
+artifacts/
+*.map
+optional_core_overlay_for_events/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Never commit game assets
+Core.zip
+*.h3m
+*.h3c
+*.lod

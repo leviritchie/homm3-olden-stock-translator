@@ -1,0 +1,20 @@
+{
+  "schema": "homm3.vanilla_stock.batch_manifest.example.v1",
+  "notes": [
+    "Copy to batch_manifest.json and replace placeholders with your paths.",
+    "Do not commit real Steam paths or commercial .h3m files."
+  ],
+  "stockCore": "${STOCK_CORE}",
+  "templateMap": "${STOCK_TEMPLATE_MAP}",
+  "installMapsDir": "${STOCK_MAPS_DIR}",
+  "artifactRoot": "./artifacts",
+  "h3mRoot": "/path/to/your/HoMM3/Maps",
+  "scenarios": [
+    {
+      "id": "twins",
+      "mapSid": "vanilla_stock_twins",
+      "h3m": "Twins.h3m",
+      "expectMapEventCount": 6
+    }
+  ]
+}
