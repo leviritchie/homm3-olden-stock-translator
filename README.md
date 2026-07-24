@@ -13,8 +13,9 @@ project. The release is readable source plus a launcher.
 2. Unzip it somewhere permanent.
 3. Double-click **`Convert-Map.bat`** (or run `Convert-Map.ps1`).
 4. First run downloads **official CPython** from [python.org](https://www.python.org/)
-   into a local `.runtime\` folder and verifies the **SHA256** checksum, then
-   installs this translator with pip.
+   into a local `.runtime\` folder and verifies the **SHA256** checksum. The
+   launcher then runs the translator from the included `src\` folder (no opaque
+   binary of this project).
 5. When prompted, provide:
    - your `.h3m`
    - stock Olden `HeroesOldenEra_Data/StreamingAssets/Core.zip`

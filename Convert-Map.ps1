@@ -41,7 +41,7 @@ $GetPipUrl = "https://bootstrap.pypa.io/get-pip.py"
 $RuntimeDir = Join-Path $Root ".runtime"
 $PythonDir = Join-Path $RuntimeDir "python"
 $PythonExe = Join-Path $PythonDir "python.exe"
-$Marker = Join-Path $RuntimeDir "translator-installed.ok"
+$SrcDir = Join-Path $Root "src"
 
 function Read-Default([string]$Prompt, [string]$Default) {
     if ($Default) {
@@ -85,20 +85,20 @@ function Ensure-Runtime {
             if ($_ -match '^\s*#\s*import site\s*$') { 'import site' } else { $_ }
         }
         if ($pthText -notcontains 'import site') { $pthText += 'import site' }
+        # Ensure the translator src/ tree is importable without pip install.
+        if ($pthText -notcontains '..\..\src') { $pthText = @('..\..\src') + $pthText }
         Set-Content -Path $pth.FullName -Value $pthText -Encoding ASCII
 
         Write-Host "Installing pip into embeddable runtime ..."
         $getPip = Join-Path $RuntimeDir "get-pip.py"
         Invoke-WebRequest -Uri $GetPipUrl -OutFile $getPip
         & $PythonExe $getPip --no-warn-script-location
+        if ($LASTEXITCODE -ne 0) { throw "get-pip.py failed with exit code $LASTEXITCODE" }
         Remove-Item $getPip -ErrorAction SilentlyContinue
     }
 
-    if (-not (Test-Path $Marker)) {
-        Write-Host "Installing translator into .runtime ..."
-        & $PythonExe -m pip install --upgrade pip
-        & $PythonExe -m pip install -e $Root
-        Set-Content -Path $Marker -Value (Get-Date -Format o) -Encoding ASCII
+    if (-not (Test-Path $SrcDir)) {
+        throw "Translator src/ folder missing next to Convert-Map.ps1: $SrcDir"
     }
 }
 
@@ -167,6 +167,7 @@ if ($script:InstallMapsDir) {
 
 Write-Host ""
 Write-Host "Converting..."
+$env:PYTHONPATH = $SrcDir
 & $PythonExe @argsList
 if ($LASTEXITCODE -ne 0) {
     throw "Conversion failed with exit code $LASTEXITCODE"
