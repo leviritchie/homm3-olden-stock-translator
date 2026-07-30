@@ -423,8 +423,10 @@ def skip_mine_family(walker: Walker, record: dict[str, Any]) -> dict[str, Any]:
 
 
 def skip_witch_hut(walker: Walker, record: dict[str, Any]) -> dict[str, Any]:
+    # RoE Witch Hut has no object payload. AB+ adds a 4-byte allowed-skills bitmask.
     start = walker.tell()
-    walker.skip(SKILLS_BYTES)
+    if record["h3mVersion"] >= h3m.H3M_VERSION_AB:
+        walker.skip(SKILLS_BYTES)
     return {"payloadKind": "witch_hut", "skillMaskBytes": walker.data[start:walker.tell()].hex()}
 
 
