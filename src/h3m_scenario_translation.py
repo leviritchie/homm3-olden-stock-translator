@@ -23,8 +23,8 @@ WHIRLPOOL_PAIRING_SOURCE = (
     "groups become a deterministic circular chain"
 )
 WHIRLPOOL_TIE_BREAK = "distance_then_northmost_then_westmost"
-MONOLITH_TWO_WAY_PAIRING_POLICY = "same_layer_same_animation_exact_pair_required"
-MONOLITH_TWO_WAY_PAIRING_SOURCE = "HoMM3 two-way monolith same-layer same-animation pairing"
+MONOLITH_TWO_WAY_PAIRING_POLICY = "cross_layer_same_animation_mutual_pair_or_circular_chain"
+MONOLITH_TWO_WAY_PAIRING_SOURCE = "HoMM3 two-way monolith same-animation pairing across map levels"
 MONOLITH_TWO_WAY_TIE_BREAK = "lowest_object_id_first"
 MONOLITH_TWO_WAY_CROSS_LAYER_POLICY = "same_subtype_cross_layer_mutual_pair_or_circular_chain"
 MONOLITH_TWO_WAY_CROSS_LAYER_SOURCE = "HoMM3 two-way monolith subtype network across map levels"
@@ -586,12 +586,17 @@ def pair_whirlpools_by_nearest_same_layer_rule(entities: Iterable[dict[str, Any]
 
 
 def pair_two_way_monoliths_by_animation_same_layer_rule(entities: Iterable[dict[str, Any]]) -> dict[str, Any]:
-    """Route two-way monoliths that share layer + animation.
+    """Route two-way monoliths that share animation (color), across layers.
+
+    Classic RoE/AB/SoD maps identify two-way monolith networks by animation DEF,
+    not by map layer. Same-color pairs routinely connect surface↔underground.
+    (Function name retains ``same_layer`` for call-site stability; grouping is by
+    animation only.)
 
     HoMM3 allows N>=2 same-color two-way monoliths (Neutral Affairs has 3).
     Olden ``propPortals`` carries a single ``targetIdx`` per object, so N==2 stays
     a mutual pair and N>2 becomes a deterministic circular chain
-    (sorted by objectId): A→B→…→Z→A.
+    (sorted by layer, then objectId): A→B→…→Z→A.
     """
 
     candidates = [
@@ -611,25 +616,27 @@ def pair_two_way_monoliths_by_animation_same_layer_rule(entities: Iterable[dict[
             "pairs": [],
         }
 
-    by_layer_animation: dict[tuple[int, str], list[dict[str, Any]]] = {}
+    by_animation: dict[str, list[dict[str, Any]]] = {}
     for candidate in candidates:
         animation = candidate.get("templateAnimation")
         if not isinstance(animation, str) or not animation:
             raise ScenarioTravelPairingError(
                 f"monolith pairing requires templateAnimation for {candidate['sourceKey']}"
             )
-        key = (int(candidate["sourceLayer"]), animation)
-        by_layer_animation.setdefault(key, []).append(candidate)
+        by_animation.setdefault(animation, []).append(candidate)
 
     pairs: list[dict[str, Any]] = []
     seen: set[int] = set()
-    for (layer, animation), group in sorted(by_layer_animation.items()):
+    for animation, group in sorted(by_animation.items()):
         if len(group) < 2:
             raise ScenarioTravelPairingError(
-                "monolith pairing requires at least 2 objects per layer/animation group; "
-                f"layer={layer} animation={animation} found {len(group)}"
+                "monolith pairing requires at least 2 objects per animation group; "
+                f"animation={animation} found {len(group)}"
             )
-        ordered = sorted(group, key=lambda item: int(item["objectId"]))
+        ordered = sorted(
+            group,
+            key=lambda item: (int(item["sourceLayer"]), int(item["objectId"])),
+        )
         for index, first in enumerate(ordered):
             second = ordered[(index + 1) % len(ordered)]
             object_a = int(first["objectId"])
@@ -644,11 +651,12 @@ def pair_two_way_monoliths_by_animation_same_layer_rule(entities: Iterable[dict[
                 "sourceKeyA": first["sourceKey"],
                 "sourceXA": first["sourceX"],
                 "sourceYA": first["sourceY"],
+                "sourceLayerA": int(first["sourceLayer"]),
                 "objectIdB": object_b,
                 "sourceKeyB": second["sourceKey"],
                 "sourceXB": second["sourceX"],
                 "sourceYB": second["sourceY"],
-                "sourceLayer": layer,
+                "sourceLayerB": int(second["sourceLayer"]),
                 "templateObjectId": h3obj.OBJECT_TWO_WAY_MONOLITH,
                 "templateAnimation": animation,
                 "category": first.get("category"),
@@ -666,7 +674,7 @@ def pair_two_way_monoliths_by_animation_same_layer_rule(entities: Iterable[dict[
         "objectId": h3obj.OBJECT_TWO_WAY_MONOLITH,
         "objectName": "two_way_monolith",
         "source": MONOLITH_TWO_WAY_PAIRING_SOURCE,
-        "policy": "same_layer_same_animation_mutual_pair_or_circular_chain",
+        "policy": MONOLITH_TWO_WAY_PAIRING_POLICY,
         "tieBreak": MONOLITH_TWO_WAY_TIE_BREAK,
         "pairCount": len(pairs),
         "pairs": pairs,
