@@ -1,0 +1,117 @@
+{
+  "schema": "homm3.vanilla_stock.regression_fingerprint.v1",
+  "id": "dungeon_keeper",
+  "mapSid": "vanilla_stock_dungeon_keeper",
+  "era": "AB",
+  "formatVersion": 21,
+  "sourceSize": 36,
+  "sourceLayers": 2,
+  "playersCount": 2,
+  "humanOwner": 1,
+  "h3ColorToFinalOwners": {
+    "0": [
+      1
+    ],
+    "1": [
+      2
+    ]
+  },
+  "ownerRenumberMapping": {
+    "1": 1,
+    "2": 2
+  },
+  "factionSplitRemappedObjectCount": 0,
+  "demotedMixedFactionCityCount": 0,
+  "orphanAiBoundCount": 0,
+  "orphanPlayableBoundCount": 0,
+  "victoryMode": "WINSTANDARD",
+  "mineEntityCount": null,
+  "playableFinalOwners": [
+    1,
+    2
+  ],
+  "humanFinalOwners": [
+    1
+  ],
+  "defeatAllEnemiesEnabled": true,
+  "spawnRows": [
+    {
+      "owner": 1,
+      "spawnType": 0,
+      "factionSid": "dungeon",
+      "isHeroDefined": true,
+      "isCityDefined": true
+    },
+    {
+      "owner": 2,
+      "spawnType": 1,
+      "factionSid": "nature",
+      "isHeroDefined": true,
+      "isCityDefined": true
+    }
+  ],
+  "eventCount": 0,
+  "unguardedEventCount": 0,
+  "guardedEventCount": 0,
+  "giveResActionCount": 0,
+  "omittedRewardGapKinds": [],
+  "timedBriefingCount": 6,
+  "timedGrantCount": 0,
+  "timedOmittedGapKinds": [],
+  "emittedInstanceCount": 1303,
+  "cityCount": 2,
+  "portalCount": 2,
+  "mineCount": 12,
+  "mapEventCount": 0,
+  "randomSquadCount": 26,
+  "randomItemCount": 5,
+  "omitReasonHistogram": {
+    "creature_bank_deferred_omit_mvp": 1,
+    "crypt_bank_deferred_omit_mvp": 1,
+    "object_anchor_outside_source_envelope_omit_mvp": 1,
+    "shipwreck_water_bank_omit_mvp": 1,
+    "shipyard_requires_boat_omit_mvp": 1,
+    "stock_access_portal_or_town_approach_cleared": 1,
+    "town_gate_or_body_intruder_cleared": 18,
+    "unmapped_template_object_id_143_omit_mvp": 3,
+    "unmapped_template_object_id_155_omit_mvp": 16,
+    "unmapped_template_object_id_49_omit_mvp": 2,
+    "warriors_tomb_deferred_omit_mvp": 1
+  },
+  "accessPortalClearedCount": 0,
+  "accessTownApproachClearedCount": 1,
+  "sceneryFootprintPlacementCount": 571,
+  "objectsPropertiesKeys": [
+    "propActionsAfter",
+    "propActionsBefore",
+    "propActionsLegacy",
+    "propActivations",
+    "propAiIntetactions",
+    "propAiIntetated",
+    "propCities",
+    "propCitiesHold",
+    "propComments",
+    "propDialogWindows",
+    "propEntities",
+    "propGrowthUnits",
+    "propHeroes",
+    "propMainObjects",
+    "propMarkers",
+    "propNoCombineGeometries",
+    "propOwners",
+    "propPortals",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propRandomHires",
+    "propRandomItems",
+    "propRandomSquads",
+    "propResParams",
+    "propResources",
+    "propRewardParams",
+    "propSpawns",
+    "propSquads",
+    "propVariants",
+    "propsName"
+  ],
+  "campaignInfoPreserved": true
+}

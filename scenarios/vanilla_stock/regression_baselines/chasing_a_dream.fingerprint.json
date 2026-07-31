@@ -1,0 +1,132 @@
+{
+  "schema": "homm3.vanilla_stock.regression_fingerprint.v1",
+  "id": "chasing_a_dream",
+  "mapSid": "vanilla_stock_chasing_a_dream",
+  "era": "SoD",
+  "formatVersion": 28,
+  "sourceSize": 36,
+  "sourceLayers": 2,
+  "playersCount": 3,
+  "humanOwner": 1,
+  "h3ColorToFinalOwners": {
+    "0": [
+      1
+    ],
+    "1": [
+      2
+    ],
+    "2": [
+      3
+    ]
+  },
+  "ownerRenumberMapping": {
+    "1": 1,
+    "2": 2,
+    "3": 3
+  },
+  "factionSplitRemappedObjectCount": 0,
+  "demotedMixedFactionCityCount": 0,
+  "orphanAiBoundCount": 0,
+  "orphanPlayableBoundCount": 0,
+  "victoryMode": "WINSTANDARD",
+  "mineEntityCount": null,
+  "playableFinalOwners": [
+    1,
+    2,
+    3
+  ],
+  "humanFinalOwners": [
+    1,
+    2,
+    3
+  ],
+  "defeatAllEnemiesEnabled": true,
+  "spawnRows": [
+    {
+      "owner": 1,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 2,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 3,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    }
+  ],
+  "eventCount": 0,
+  "unguardedEventCount": 0,
+  "guardedEventCount": 0,
+  "giveResActionCount": 0,
+  "omittedRewardGapKinds": [],
+  "timedBriefingCount": 1,
+  "timedGrantCount": 0,
+  "timedOmittedGapKinds": [],
+  "emittedInstanceCount": 726,
+  "cityCount": 3,
+  "portalCount": 6,
+  "mineCount": 20,
+  "mapEventCount": 0,
+  "randomSquadCount": 30,
+  "randomItemCount": 5,
+  "omitReasonHistogram": {
+    "black_market_deferred_omit_mvp": 1,
+    "creature_bank_deferred_omit_mvp": 2,
+    "crypt_bank_deferred_omit_mvp": 1,
+    "object_anchor_outside_source_envelope_omit_mvp": 21,
+    "random_dwelling_lvl_unsupported_omit_mvp": 3,
+    "unmapped_template_object_id_106_omit_mvp": 1,
+    "unmapped_template_object_id_155_omit_mvp": 15,
+    "unmapped_template_object_id_158_omit_mvp": 2,
+    "unmapped_template_object_id_15_omit_mvp": 1,
+    "unmapped_template_object_id_199_omit_mvp": 7,
+    "unmapped_template_object_id_57_omit_mvp": 9,
+    "warriors_tomb_deferred_omit_mvp": 1
+  },
+  "accessPortalClearedCount": 0,
+  "accessTownApproachClearedCount": 0,
+  "sceneryFootprintPlacementCount": 427,
+  "objectsPropertiesKeys": [
+    "propActionsAfter",
+    "propActionsBefore",
+    "propActionsLegacy",
+    "propActivations",
+    "propAiIntetactions",
+    "propAiIntetated",
+    "propCities",
+    "propCitiesHold",
+    "propComments",
+    "propDialogWindows",
+    "propEntities",
+    "propGrowthUnits",
+    "propHeroes",
+    "propMainObjects",
+    "propMarkers",
+    "propNoCombineGeometries",
+    "propOwners",
+    "propPortals",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propRandomHires",
+    "propRandomItems",
+    "propRandomSquads",
+    "propResParams",
+    "propResources",
+    "propRewardParams",
+    "propSpawns",
+    "propSquads",
+    "propVariants",
+    "propsName"
+  ],
+  "campaignInfoPreserved": true
+}

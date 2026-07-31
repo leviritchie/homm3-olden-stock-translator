@@ -13,7 +13,6 @@ Pipeline mirrors raw_translation (without GE overlays / homm3_* SIDs):
 from __future__ import annotations
 
 import hashlib
-import os
 import json
 import re
 import zipfile
@@ -42,7 +41,17 @@ from .object_map import (
     VanillaStockObjectMapError,
     resolve_object_sid,
 )
+from .access_contract import VanillaStockAccessError, apply_stock_access_pass
+from .ownership_contract import (
+    VanillaStockOwnershipError,
+    apply_ownership_contract,
+    h3_owner_to_provisional_olden,
+)
 from .placement_ground_truth import build_placement_ground_truth
+from .scenery_canon_postpass import (
+    VanillaStockSceneryPostpassError,
+    apply_stock_scenery_canon_postpass,
+)
 from .scenery_footprint import (
     POLICY as SCENERY_FOOTPRINT_POLICY,
     SCHEMA as SCENERY_FOOTPRINT_SCHEMA,
@@ -84,18 +93,19 @@ from .victory_events import (
 )
 
 
-def _env_path(name: str) -> Path | None:
-    raw = os.environ.get(name)
-    if not raw:
-        return None
-    return Path(raw)
-
-
-DEFAULT_STOCK_CORE = _env_path("STOCK_CORE")
-DEFAULT_STOCK_TEMPLATE_MAP = _env_path("STOCK_TEMPLATE_MAP")
-DEFAULT_STOCK_MAPS_DIR = _env_path("STOCK_MAPS_DIR")
+DEFAULT_STOCK_CORE = Path(
+    r"V:/SteamLibrary/steamapps/common/Heroes of Might and Magic Olden Era/"
+    r"HeroesOldenEra_Data/StreamingAssets/Core.zip"
+)
+DEFAULT_STOCK_TEMPLATE_MAP = Path(
+    r"V:/SteamLibrary/steamapps/common/Heroes of Might and Magic Olden Era/"
+    r"HeroesOldenEra_Data/StreamingAssets/maps/Thirst_for_Power.map"
+)
+DEFAULT_STOCK_MAPS_DIR = Path(
+    r"V:/SteamLibrary/steamapps/common/Heroes of Might and Magic Olden Era - Golden Era/"
+    r"HeroesOldenEra_Data/StreamingAssets/maps"
+)
 DEFAULT_SUBSTITUTION_TABLE = Path(__file__).with_name("substitution_table.json")
-STOCK_TEMPLATE_MAP_BASENAME = "Thirst_for_Power.map"
 
 CITY_BUILDINGS_BAN_SID = "default_buildings_ban"
 CITY_BUILDINGS_CONSTRUCTION_SID = "rich_buildings_construction"
@@ -105,20 +115,6 @@ FORBIDDEN_SID_SUBSTRINGS = ("homm3", "h3_", "golden_era")
 
 class VanillaStockEmitError(ValueError):
     """Raised when a stock map cannot be emitted without hiding a mismatch."""
-
-
-def stock_template_map_beside_core(stock_core: Path) -> Path:
-    """Every stock install ships Thirst beside Core.zip under StreamingAssets/maps/."""
-
-    return stock_core.resolve().parent / "maps" / STOCK_TEMPLATE_MAP_BASENAME
-
-
-def resolve_stock_template_map(stock_core: Path, template_map: Path | None) -> Path:
-    if template_map is not None:
-        return Path(template_map)
-    if DEFAULT_STOCK_TEMPLATE_MAP is not None:
-        return DEFAULT_STOCK_TEMPLATE_MAP
-    return stock_template_map_beside_core(stock_core)
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -175,25 +171,51 @@ def load_stock_hero_ids(core: Path) -> set[str]:
     return ids
 
 
+# Empty native ObjectsProperties families proven by the stock Thirst template and
+# procedural native emitter. Keep campaignInfo on meta; do not invent placement rows.
+NATIVE_EMPTY_OBJECT_PROPERTY_KEYS: tuple[str, ...] = (
+    "propCities",
+    "propPortals",
+    "propSpawns",
+    "propHeroes",
+    "propRandomSquads",
+    "propOwners",
+    "propRandomItems",
+    "propRandomHires",
+    "propEntities",
+    "propActionsBefore",
+    "propActionsAfter",
+    "propActionsLegacy",
+    "propActivations",
+    "propMarkers",
+    "propRewardParams",
+    "propResParams",
+    "propResources",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propDialogWindows",
+    "propGrowthUnits",
+    "propSquads",
+    "propVariants",
+    "propAiIntetated",
+    "propNoCombineGeometries",
+    "propCitiesHold",
+    "propMainObjects",
+    "propComments",
+    "propsName",
+)
+
+
 def empty_object_properties(_template: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "propCities": [],
-        "propPortals": [],
-        "propSpawns": [],
-        "propHeroes": [],
-        "propRandomSquads": [],
-        "propOwners": [],
-        "propRandomItems": [],
-        "propEntities": [],
-        "propActionsBefore": [],
-        "propActionsAfter": [],
-        "propActivations": [],
-        "propMarkers": [],
-        "propRewardParams": [],
-        "propQuestMarkers": [],
-        "propQuestNames": [],
-        "propDialogWindows": [],
-    }
+    props = {key: [] for key in NATIVE_EMPTY_OBJECT_PROPERTY_KEYS}
+    # Preserve any additional template families as empty lists.
+    if isinstance(_template, dict):
+        for key, value in _template.items():
+            if key in props:
+                continue
+            if isinstance(value, list):
+                props[key] = []
+    return props
 
 
 def append_object_instance(
@@ -209,25 +231,6 @@ def append_object_instance(
             group["levels"].append(0.0)
             return
     objects.append({"sid": sid, "ids": [object_id], "nodes": [node], "rotations": [rotation], "levels": [0.0]})
-
-
-def remove_object_instance(objects: list[dict[str, Any]], object_id: int) -> str | None:
-    """Remove one emitted instance by id. Returns the SID that held it, if any."""
-
-    for group in objects:
-        ids = group.get("ids")
-        if not isinstance(ids, list) or object_id not in ids:
-            continue
-        index = ids.index(object_id)
-        for key in ("ids", "nodes", "rotations", "levels"):
-            values = group.get(key)
-            if isinstance(values, list) and index < len(values):
-                values.pop(index)
-        sid = str(group.get("sid") or "")
-        if not ids:
-            objects.remove(group)
-        return sid or None
-    return None
 
 
 def terrain_biome_at(layer_tiles_by_key: dict[str, dict[str, Any]], layer: int, x: int, y: int) -> str:
@@ -246,12 +249,15 @@ H3_NEUTRAL_OWNER = 255
 
 
 def h3_owner_to_olden(owner: Any) -> int | None:
-    """Map H3 owner byte to Olden 1-based player index; neutral 255 → None."""
-    if owner is None or owner == H3_NEUTRAL_OWNER:
-        return None
-    if not isinstance(owner, int) or owner < 0 or owner > 7:
-        raise VanillaStockEmitError(f"unsupported H3 owner index {owner!r}")
-    return owner + 1
+    """Map H3 owner byte to provisional Olden 1-based index; neutral 255 → None.
+
+    Final native owners are produced later by ``apply_ownership_contract``
+    (compact human=1, AI=2..N). Callers must not treat this as the lobby seat.
+    """
+    try:
+        return h3_owner_to_provisional_olden(owner)
+    except VanillaStockOwnershipError as ex:
+        raise VanillaStockEmitError(str(ex)) from ex
 
 
 def _stock_random_item_rarity(entity: dict[str, Any]) -> int:
@@ -635,26 +641,19 @@ def build_vanilla_stock_map(
     *,
     h3m_path: Path,
     stock_core: Path = DEFAULT_STOCK_CORE,
-    template_map: Path | None = DEFAULT_STOCK_TEMPLATE_MAP,
+    template_map: Path = DEFAULT_STOCK_TEMPLATE_MAP,
     out_dir: Path,
     map_sid: str | None = None,
     install_maps_dir: Path | None = None,
     substitution_table: Path = DEFAULT_SUBSTITUTION_TABLE,
+    enable_scenery_canon_postpass: bool = False,
 ) -> dict[str, Any]:
-    if stock_core is None:
-        raise VanillaStockEmitError("stock Core.zip path is required")
     if not h3m_path.is_file():
         raise VanillaStockEmitError(f"H3M not found: {h3m_path}")
     if not stock_core.is_file():
         raise VanillaStockEmitError(f"stock Core.zip not found: {stock_core}")
-    template_map = resolve_stock_template_map(stock_core, template_map)
     if not template_map.is_file():
-        raise VanillaStockEmitError(
-            f"stock template map not found beside Core.zip: {template_map} "
-            f"(expected StreamingAssets/maps/{STOCK_TEMPLATE_MAP_BASENAME})"
-        )
-
-    warnings: list[str] = []
+        raise VanillaStockEmitError(f"stock template map not found: {template_map}")
 
     stock_objects = load_stock_object_ids(stock_core)
     try:
@@ -767,15 +766,7 @@ def build_vanilla_stock_map(
                     terrain_biome=biome,
                 )
             except VanillaStockObjectMapError as ex:
-                warning = f"omit unsupported object {_entity_key(entity)}: {ex}"
-                warnings.append(warning)
-                omit_counts["unsupported_object_map_error_omit"] += 1
-                decisions_by_source_index[object_id] = {
-                    "action": "omit",
-                    "reason": "unsupported_object_map_error_omit",
-                    "detail": str(ex),
-                }
-                continue
+                raise VanillaStockEmitError(str(ex)) from ex
         decision = _force_stock_travel_decision(record, decision)
         if (
             decision.get("action") == "emit"
@@ -791,49 +782,19 @@ def build_vanilla_stock_map(
         decisions_by_source_index[object_id] = dict(decision)
 
         if decision.get("action") == "miss":
-            reason = str(decision.get("reason") or "copied_substitution_miss")
-            omit_counts[reason] += 1
-            warnings.append(f"omit unmapped object {_entity_key(entity)}: {reason}")
+            omit_counts[str(decision.get("reason") or "copied_substitution_miss")] += 1
             continue
         if decision.get("action") == "omit":
-            reason = str(decision.get("reason") or "unmapped_object_omit")
-            omit_counts[reason] += 1
-            warnings.append(f"omit unsupported object {_entity_key(entity)}: {reason}")
+            omit_counts[str(decision.get("reason") or "unmapped_object_omit")] += 1
             continue
         if decision.get("action") != "emit":
-            warning = f"omit object {_entity_key(entity)} with unknown decision {decision!r}"
-            warnings.append(warning)
-            omit_counts["unknown_object_decision_omit"] += 1
-            decisions_by_source_index[object_id] = {
-                "action": "omit",
-                "reason": "unknown_object_decision_omit",
-                "detail": repr(decision),
-            }
-            continue
+            raise VanillaStockEmitError(f"unknown object decision: {decision}")
 
         replacement = str(decision["sid"])
         if replacement not in stock_objects:
-            warning = (
-                f"omit object {_entity_key(entity)}: emit SID not in stock Core: {replacement}"
-            )
-            warnings.append(warning)
-            omit_counts["emit_sid_missing_from_stock_omit"] += 1
-            decisions_by_source_index[object_id] = {
-                "action": "omit",
-                "reason": "emit_sid_missing_from_stock_omit",
-                "sid": replacement,
-            }
-            continue
+            raise VanillaStockEmitError(f"emit SID not in stock Core: {replacement}")
         if any(token in replacement.lower() for token in FORBIDDEN_SID_SUBSTRINGS):
-            warning = f"omit object {_entity_key(entity)}: refusing GE/h3 SID leak: {replacement}"
-            warnings.append(warning)
-            omit_counts["ge_sid_leak_omit"] += 1
-            decisions_by_source_index[object_id] = {
-                "action": "omit",
-                "reason": "ge_sid_leak_omit",
-                "sid": replacement,
-            }
-            continue
+            raise VanillaStockEmitError(f"refusing GE/h3 SID leak: {replacement}")
         kind = str(decision.get("kind") or "")
         if kind == "scenery":
             plan_record = dict(record)
@@ -850,15 +811,7 @@ def build_vanilla_stock_map(
                     source_height=atlas.source_height,
                 )
             except VanillaStockSceneryFootprintError as ex:
-                warning = f"omit scenery {_entity_key(entity)}: {ex}"
-                warnings.append(warning)
-                omit_counts["scenery_footprint_error_omit"] += 1
-                decisions_by_source_index[object_id] = {
-                    "action": "omit",
-                    "reason": "scenery_footprint_error_omit",
-                    "detail": str(ex),
-                }
-                continue
+                raise VanillaStockEmitError(str(ex)) from ex
             placement_rows: list[dict[str, Any]] = []
             for placement_index, placement in enumerate(footprint_plan["placements"]):
                 placement_id = object_id if placement_index == 0 else next_synthetic_object_id
@@ -904,15 +857,7 @@ def build_vanilla_stock_map(
                     rotation=0,
                 )
             except town_gate_align.TownGateAlignError as ex:
-                warning = f"omit town {_entity_key(entity)}: town GATE align failed: {ex}"
-                warnings.append(warning)
-                omit_counts["town_gate_align_error_omit"] += 1
-                decisions_by_source_index[object_id] = {
-                    "action": "omit",
-                    "reason": "town_gate_align_error_omit",
-                    "detail": str(ex),
-                }
-                continue
+                raise VanillaStockEmitError(f"town GATE align failed: {ex}") from ex
             decisions_by_source_index[object_id] = {
                 **decisions_by_source_index[object_id],
                 "townAnchorEvidence": town_anchor_evidence,
@@ -922,21 +867,19 @@ def build_vanilla_stock_map(
         map_event_guard_info: dict[str, Any] | None = None
         if kind == "map_event":
             map_event_guard_info = classify_map_event_guards(record)
+            if map_event_guard_info.get("omit"):
+                omit_counts[str(map_event_guard_info.get("omitReason") or "map_event_omit")] += 1
+                decisions_by_source_index[object_id] = {
+                    "action": "omit",
+                    "reason": str(map_event_guard_info.get("omitReason") or "map_event_omit"),
+                    "kind": "map_event",
+                    "unknownCreatureTypes": map_event_guard_info.get("unknownCreatureTypes"),
+                }
+                continue
             if map_event_guard_info.get("hasGuards"):
                 replacement = STOCK_MAP_EVENT_GUARD_SID
                 if replacement not in stock_objects:
-                    warning = (
-                        f"omit map event {_entity_key(entity)}: "
-                        f"guard host SID not in stock Core: {replacement}"
-                    )
-                    warnings.append(warning)
-                    omit_counts["map_event_guard_sid_missing_omit"] += 1
-                    decisions_by_source_index[object_id] = {
-                        "action": "omit",
-                        "reason": "map_event_guard_sid_missing_omit",
-                        "sid": replacement,
-                    }
-                    continue
+                    raise VanillaStockEmitError(f"map event host SID not in stock Core: {replacement}")
                 append_object_instance(objects, replacement, object_id, node)
                 emit_counts[replacement] += 1
                 guarded_event_host_nodes[object_id] = int(node)
@@ -962,43 +905,12 @@ def build_vanilla_stock_map(
             if free_choice:
                 faction = ""
             elif not faction or faction not in stock_factions:
-                warning = (
-                    f"omit town {_entity_key(entity)}: "
-                    f"no stock faction parallel for {faction!r}"
-                )
-                warnings.append(warning)
-                removed_sid = remove_object_instance(objects, object_id)
-                if removed_sid:
-                    emit_counts[removed_sid] -= 1
-                    if emit_counts[removed_sid] <= 0:
-                        del emit_counts[removed_sid]
-                omit_counts["town_faction_unsupported_omit"] += 1
-                decisions_by_source_index[object_id] = {
-                    "action": "omit",
-                    "reason": "town_faction_unsupported_omit",
-                    "factionSid": faction,
-                }
-                continue
+                raise VanillaStockEmitError(f"town faction not in stock Core: {faction!r}")
             # Owned free-choice / unmapped towns stay random-city so the lobby can pick.
             if free_choice and replacement != "random-city":
-                warning = (
-                    f"free-choice town {_entity_key(entity)} remapped "
-                    f"{replacement!r} → random-city"
+                raise VanillaStockEmitError(
+                    f"free-choice town must emit random-city, got {replacement!r} at {_entity_key(entity)}"
                 )
-                warnings.append(warning)
-                removed_sid = remove_object_instance(objects, object_id)
-                if removed_sid:
-                    emit_counts[removed_sid] -= 1
-                    if emit_counts[removed_sid] <= 0:
-                        del emit_counts[removed_sid]
-                replacement = "random-city"
-                append_object_instance(objects, replacement, object_id, node)
-                emit_counts[replacement] += 1
-                decisions_by_source_index[object_id] = {
-                    **decisions_by_source_index[object_id],
-                    "sid": replacement,
-                    "reason": f"{decision.get('reason')}|force_random_city_free_choice",
-                }
             city_rows.append(
                 {
                     "type": 0,
@@ -1075,20 +987,9 @@ def build_vanilla_stock_map(
             try:
                 rarity = _stock_random_item_rarity(entity)
             except (TypeError, ValueError) as ex:
-                warning = f"omit random-item {_entity_key(entity)}: {ex}"
-                warnings.append(warning)
-                removed_sid = remove_object_instance(objects, object_id)
-                if removed_sid:
-                    emit_counts[removed_sid] -= 1
-                    if emit_counts[removed_sid] <= 0:
-                        del emit_counts[removed_sid]
-                omit_counts["random_item_rarity_omit"] += 1
-                decisions_by_source_index[object_id] = {
-                    "action": "omit",
-                    "reason": "random_item_rarity_omit",
-                    "detail": str(ex),
-                }
-                continue
+                raise VanillaStockEmitError(
+                    f"random-item rarity unresolved for {_entity_key(entity)}: {ex}"
+                ) from ex
             random_item_rows.append({"type": 0, "id": object_id, "rarity": rarity})
         if kind == "mine":
             emitted_mine_object_ids.append(object_id)
@@ -1171,6 +1072,35 @@ def build_vanilla_stock_map(
             if isinstance(cleared, dict) and isinstance(cleared.get("objectId"), int):
                 cleared_ids.add(int(cleared["objectId"]))
 
+    try:
+        access_report = apply_stock_access_pass(
+            objects,
+            None,
+            stock_object_configs=stock_object_configs,
+            atlas_width=atlas.atlas_width,
+            atlas_height=atlas.atlas_height,
+        )
+    except VanillaStockAccessError as ex:
+        raise VanillaStockEmitError(str(ex)) from ex
+    for object_id in access_report.get("clearedObjectIds") or []:
+        cleared_ids.add(int(object_id))
+        decisions_by_source_index[int(object_id)] = {
+            "action": "omit",
+            "reason": "stock_access_portal_or_town_approach_cleared",
+            "kind": "cleared",
+        }
+        omit_counts["stock_access_portal_or_town_approach_cleared"] += 1
+
+    try:
+        scenery_postpass_report = apply_stock_scenery_canon_postpass(
+            objects=objects,
+            stock_object_configs=stock_object_configs,
+            stock_object_ids=stock_objects,
+            enabled=bool(enable_scenery_canon_postpass),
+        )
+    except VanillaStockSceneryPostpassError as ex:
+        raise VanillaStockEmitError(str(ex)) from ex
+
     footprint_prune = _prune_scenery_footprints_after_gate_face(
         scenery_footprint_rows,
         cleared_ids=cleared_ids,
@@ -1208,65 +1138,13 @@ def build_vanilla_stock_map(
     ):
         raise VanillaStockEmitError("stock template map must expose a river randomSeed")
     river_seed = int(template_rivers[0]["randomSeed"])
-    scenario_players_by_olden_owner = {
-        int(row["index"]) + 1: row
-        for row in (scenario_header.get("players") or [])
-        if isinstance(row, dict) and isinstance(row.get("index"), int) and row.get("playable")
-    }
-    spawn_build_rows: list[dict[str, Any]] = []
-    taken_heroes: list[str] = []
-
-    spawn_city_id_by_owner: dict[int, int] = {}
-    spawn_selection_rows: list[dict[str, Any]] = []
-    for owner, scenario_player in scenario_players_by_olden_owner.items():
-        owned_cities = [city for city in city_rows if city.get("_owner") == owner]
-        if not owned_cities:
-            raise VanillaStockEmitError(f"playable H3 scenario player has no owned town for spawn: {owner}")
-        main_town = scenario_player.get("mainTown")
-        if isinstance(main_town, dict):
-            expected_position = {
-                # H3 stores the main-town entrance two cells left of the placed
-                # town object's binary anchor.
-                "x": int(main_town["x"]) + 2,
-                "y": int(main_town["y"]),
-                "z": int(main_town["z"]),
-            }
-            candidates = [
-                city for city in owned_cities if city.get("_sourcePosition") == expected_position
-            ]
-            if len(candidates) != 1:
-                raise VanillaStockEmitError(
-                    f"H3 owner {owner} main town {expected_position} matched "
-                    f"{len(candidates)} owned town objects"
-                )
-            selection_reason = "h3_designated_main_town"
-        elif len(owned_cities) == 1:
-            candidates = owned_cities
-            selection_reason = "only_owned_town"
-        else:
-            # Olden requires exactly one lobby spawn per player, while H3 permits
-            # a player to own several towns without designating any as the main
-            # town. Object-table order is the only stable source ordering here.
-            candidates = [min(owned_cities, key=lambda city: int(city["id"]))]
-            selection_reason = "lowest_source_object_id_when_h3_has_no_main_town"
-        selected_id = int(candidates[0]["id"])
-        spawn_city_id_by_owner[owner] = selected_id
-        spawn_selection_rows.append(
-            {
-                "owner": owner,
-                "cityObjectId": selected_id,
-                "sourcePosition": candidates[0].get("_sourcePosition"),
-                "ownedTownCount": len(owned_cities),
-                "reason": selection_reason,
-            }
-        )
 
     town_anchor_rows: list[dict[str, Any]] = []
+    free_choice_by_city_id: dict[int, bool] = {}
     for city in city_rows:
-        owner = city.pop("_owner")
-        city.pop("_sourcePosition", None)
-        town_evidence = city.pop("_townAnchorEvidence", None)
-        free_choice = bool(city.pop("_freeChoice", False))
+        town_evidence = city.get("_townAnchorEvidence")
+        free_choice = bool(city.get("_freeChoice", False))
+        free_choice_by_city_id[int(city["id"])] = free_choice
         if isinstance(town_evidence, dict):
             town_anchor_rows.append(
                 {
@@ -1276,22 +1154,93 @@ def build_vanilla_stock_map(
                     **town_evidence,
                 }
             )
-        props["propCities"].append(city)
-        if owner is None:
-            continue
-        if int(city["id"]) != spawn_city_id_by_owner[int(owner)]:
-            city["spawnHero"] = False
-            continue
-        scenario_player = scenario_players_by_olden_owner.get(int(owner))
-        if scenario_player is None:
-            raise VanillaStockEmitError(f"city owner is not a playable H3 scenario player: {owner}")
-        spawn_type = 0 if scenario_player.get("canHuman") else 1
-        if not scenario_player.get("canHuman") and not scenario_player.get("canComputer"):
-            raise VanillaStockEmitError(f"playable H3 scenario player cannot be human or computer: {owner}")
 
-        # Fixed stock towns stay locked. Random/unmapped towns follow the owning
-        # player's H3 faction availability (free-choice, or a single forced stock bit).
-        if free_choice:
+    entities_by_id = {
+        int(entity["sourceIndex"]): entity
+        for entity in entities
+        if isinstance(entity.get("sourceIndex"), int)
+    }
+    try:
+        ownership_report = apply_ownership_contract(
+            properties=props,
+            city_rows=city_rows,
+            scenario_header=scenario_header,
+            entities_by_id=entities_by_id,
+        )
+    except VanillaStockOwnershipError as ex:
+        raise VanillaStockEmitError(str(ex)) from ex
+
+    # Strip temporary city_row fields after ownership materialization.
+    for city in city_rows:
+        city.pop("_owner", None)
+        city.pop("_sourcePosition", None)
+        city.pop("_townAnchorEvidence", None)
+        city.pop("_freeChoice", None)
+
+    h3_color_to_final_owners = {
+        int(k): [int(x) for x in v]
+        for k, v in (ownership_report.get("h3ColorToFinalOwners") or {}).items()
+    }
+    scenario_players_by_h3_color = {
+        int(row["index"]): row
+        for row in (scenario_header.get("players") or [])
+        if isinstance(row, dict) and isinstance(row.get("index"), int) and row.get("playable")
+    }
+    lobby_primary_by_owner = {
+        int(k): int(v)
+        for k, v in (ownership_report.get("lobbyPrimaryCityByOwner") or {}).items()
+    }
+    spawn_selection_rows = list(ownership_report.get("spawnSelection") or [])
+    city_by_id = {
+        int(row["id"]): row
+        for row in (props.get("propCities") or [])
+        if isinstance(row, dict) and isinstance(row.get("id"), int)
+    }
+    spawn_rows_by_id = {
+        int(row["id"]): row
+        for row in (props.get("propSpawns") or [])
+        if isinstance(row, dict) and isinstance(row.get("id"), int)
+    }
+
+    # Non-primary owned cities must not spawn a lobby hero.
+    for row in props.get("propSpawns") or []:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), int):
+            continue
+        owner = int(row["owner"])
+        object_id = int(row["id"])
+        city = city_by_id.get(object_id)
+        if city is None:
+            continue
+        if lobby_primary_by_owner.get(owner) != object_id:
+            city["spawnHero"] = False
+
+    spawn_build_rows: list[dict[str, Any]] = []
+    taken_heroes: list[str] = []
+    for owner, primary_id in sorted(lobby_primary_by_owner.items()):
+        city = city_by_id.get(primary_id)
+        spawn_row = spawn_rows_by_id.get(primary_id)
+        if city is None or spawn_row is None:
+            raise VanillaStockEmitError(
+                f"lobby primary city {primary_id} for owner {owner} missing prop bindings"
+            )
+        if spawn_row.get("spawnType") not in (0, 1):
+            raise VanillaStockEmitError(
+                f"lobby primary {primary_id} owner {owner} has invalid spawnType {spawn_row.get('spawnType')!r}"
+            )
+        spawn_type = int(spawn_row["spawnType"])
+        free_choice = bool(free_choice_by_city_id.get(primary_id, False))
+
+        # Resolve free-choice against the originating H3 player's faction mask when present.
+        origin_h3 = None
+        for h3_color, finals in h3_color_to_final_owners.items():
+            if owner in finals:
+                origin_h3 = h3_color
+                break
+        scenario_player = (
+            scenario_players_by_h3_color.get(origin_h3) if origin_h3 is not None else None
+        )
+
+        if free_choice and scenario_player is not None:
             player_choice = resolve_stock_faction_choice(
                 factions_mask=scenario_player.get("factionsMask"),
                 is_faction_random=scenario_player.get("isFactionRandom"),
@@ -1299,20 +1248,23 @@ def build_vanilla_stock_map(
             )
             free_choice = bool(player_choice["freeChoice"])
             if free_choice:
-                # Native editable city choice contract (Story_maps/t_M2 + lobby
-                # SlotModel defaults): undefined city/hero metadata. Keeping
-                # isCityDefined=true fixes the slot to its current value, so an
-                # empty faction merely becomes a locked Random selection.
                 city["isDefined"] = False
                 city["factionSid"] = ""
                 city["spawnHero"] = False
             else:
                 city["factionSid"] = str(player_choice["factionSid"])
+                city["isDefined"] = True
+                city["spawnHero"] = True
+        elif free_choice:
+            # Synthetic/orphan free-choice without an H3 player mask stays editable.
+            city["isDefined"] = False
+            city["factionSid"] = ""
+            city["spawnHero"] = False
 
         if free_choice:
             spawn_build_rows.append(
                 {
-                    "spawnId": int(city["id"]),
+                    "spawnId": primary_id,
                     "owner": owner,
                     "spawnType": spawn_type,
                     "faction": "",
@@ -1321,12 +1273,15 @@ def build_vanilla_stock_map(
                 }
             )
             continue
-        faction = str(city["factionSid"])
+
+        faction = str(city.get("factionSid") or "")
         if faction not in stock_factions:
             raise VanillaStockEmitError(f"locked town faction not in stock Core: {faction!r}")
         hero_sid = DEFAULT_STOCK_HERO_BY_FACTION.get(faction)
         if hero_sid is None or hero_sid not in stock_heroes:
-            raise VanillaStockEmitError(f"default stock hero missing for faction {faction}: {hero_sid}")
+            raise VanillaStockEmitError(
+                f"default stock hero missing for faction {faction}: {hero_sid}"
+            )
         candidates = [hero_sid] + sorted(
             hero for hero in stock_heroes if hero.startswith(hero_sid.rsplit("_", 1)[0] + "_")
         )
@@ -1334,9 +1289,11 @@ def build_vanilla_stock_map(
         if hero_sid is None:
             raise VanillaStockEmitError(f"no unused stock heroes left for faction {faction}")
         taken_heroes.append(hero_sid)
+        city["isDefined"] = True
+        city["spawnHero"] = True
         spawn_build_rows.append(
             {
-                "spawnId": int(city["id"]),
+                "spawnId": primary_id,
                 "owner": owner,
                 "spawnType": spawn_type,
                 "faction": faction,
@@ -1345,10 +1302,21 @@ def build_vanilla_stock_map(
             }
         )
 
-    # Human-capable spawns first so the lobby binds the player to the intended start town/faction.
+    # Human-capable spawns first so the lobby binds the intended start town/faction.
     spawn_build_rows.sort(key=lambda row: (int(row["spawnType"]), int(row["owner"])))
     spawn_meta_rows: list[dict[str, Any]] = []
-    taken_heroes = [str(row["heroSid"]) for row in spawn_build_rows if not row.get("freeChoice") and row.get("heroSid")]
+    taken_heroes = [
+        str(row["heroSid"])
+        for row in spawn_build_rows
+        if not row.get("freeChoice") and row.get("heroSid")
+    ]
+    # Ownership contract already wrote City propSpawns; refresh hero locks for primaries.
+    primary_ids = set(lobby_primary_by_owner.values())
+    props["propHeroes"] = [
+        row
+        for row in (props.get("propHeroes") or [])
+        if isinstance(row, dict) and int(row.get("id") or -1) not in primary_ids
+    ]
     for row in spawn_build_rows:
         spawn_id = int(row["spawnId"])
         owner = int(row["owner"])
@@ -1356,19 +1324,7 @@ def build_vanilla_stock_map(
         free_choice = bool(row.get("freeChoice"))
         faction = str(row["faction"])
         hero_sid = str(row["heroSid"])
-        props["propSpawns"].append(
-            {
-                "type": 0,
-                "id": spawn_id,
-                "owner": owner,
-                "spawnType": spawn_type,
-                "spawnPointType": 0,
-                "isLocked": False,
-            }
-        )
         if free_choice:
-            # Lobby free-choice. qmq() maps both false definition flags to
-            # SlotModel's editable random defaults. Empty SIDs mirror t_M2.
             spawn_meta_rows.append(
                 {
                     "owner": owner,
@@ -1385,7 +1341,9 @@ def build_vanilla_stock_map(
                 }
             )
             continue
-        props["propHeroes"].append({"type": 0, "id": spawn_id, "isDefined": True, "heroSid": hero_sid})
+        props["propHeroes"].append(
+            {"type": 0, "id": spawn_id, "isDefined": True, "heroSid": hero_sid}
+        )
         spawn_meta_rows.append(
             {
                 "owner": owner,
@@ -1509,72 +1467,42 @@ def build_vanilla_stock_map(
     try:
         victory_info = apply_victory_contract(
             header=scenario_header,
-            map_sid=sid,
             map_title=title,
             meta=meta,
             map_data=map_data,
             props=props,
             emitted_mine_object_ids=emitted_mine_object_ids,
             source_mine_record_count=len(source_mines),
+            h3_color_to_final_owners=h3_color_to_final_owners,
         )
-        if victory_info.get("warning"):
-            warnings.append(str(victory_info["warning"]))
         occupied_for_events = _occupied_nodes_for_event_relocation(
             objects,
             stock_object_configs=stock_object_configs,
             atlas_width=atlas.atlas_width,
             atlas_height=atlas.atlas_height,
         )
-        try:
-            event_info = apply_map_events(
-                map_sid=sid,
-                map_title=title,
-                event_records=emitted_event_records,
-                props=props,
-                provisional_nodes=unguarded_event_provisional_nodes,
-                host_nodes=guarded_event_host_nodes,
-                levels_map=list(arrays["levelsMap"]),
-                climbs_map=list(arrays["climbsMap"]),
-                occupied_nodes=occupied_for_events,
-                envelope_nodes=_envelope_nodes_for_atlas(atlas),
-                atlas_width=atlas.atlas_width,
-                atlas_height=atlas.atlas_height,
-                layer_width=atlas.source_width,
-                first_marker_id=1,
-            )
-        except VanillaStockVictoryError as ex:
-            warnings.append(f"map events omitted: {ex}")
-            event_info = {
-                "eventCount": 0,
-                "unguardedCount": 0,
-                "guardedCount": 0,
-                "giveResActionCount": 0,
-                "removeResActionCount": 0,
-                "spawnMapObjectActionCount": 0,
-                "omittedRewardGaps": [],
-                "notes": [str(ex)],
-                "quests": [],
-                "counters": [],
-                "dialogs": [],
-                "decoPlacements": [],
-            }
-        try:
-            timed_info = apply_global_timed_events(
-                map_sid=sid,
-                map_title=title,
-                global_timed_events=(alignment.get("globalTimedEvents") or None),
-            )
-        except VanillaStockVictoryError as ex:
-            warnings.append(f"timed events omitted: {ex}")
-            timed_info = {
-                "briefingCount": 0,
-                "timedGrantCount": 0,
-                "omittedGaps": [str(ex)],
-                "notes": [str(ex)],
-                "quests": [],
-                "counters": [],
-                "dialogDocuments": [],
-            }
+        event_info = apply_map_events(
+            map_sid=sid,
+            map_title=title,
+            event_records=emitted_event_records,
+            props=props,
+            provisional_nodes=unguarded_event_provisional_nodes,
+            host_nodes=guarded_event_host_nodes,
+            levels_map=list(arrays["levelsMap"]),
+            climbs_map=list(arrays["climbsMap"]),
+            occupied_nodes=occupied_for_events,
+            envelope_nodes=_envelope_nodes_for_atlas(atlas),
+            atlas_width=atlas.atlas_width,
+            atlas_height=atlas.atlas_height,
+            layer_width=atlas.source_width,
+            first_marker_id=1,
+            h3_color_to_final_owners=h3_color_to_final_owners,
+        )
+        timed_info = apply_global_timed_events(
+            map_sid=sid,
+            map_title=title,
+            global_timed_events=(alignment.get("globalTimedEvents") or None),
+        )
     except (VanillaStockVictoryError, KeyError, TypeError, ValueError) as ex:
         raise VanillaStockEmitError(str(ex)) from ex
     if len(chunks) < 4 or not isinstance(chunks[3], dict):
@@ -1622,10 +1550,8 @@ def build_vanilla_stock_map(
     all_dialog_docs = list(event_info.get("dialogDocuments") or []) + list(
         timed_info.get("dialogDocuments") or []
     )
-    loc_tokens = list(victory_info.get("locTokens") or [])
     optional_overlay_dir: Path | None = None
     core_dialog_install_reports: list[dict[str, Any]] = []
-    core_loc_install_reports: list[dict[str, Any]] = []
     if all_dialog_docs:
         optional_overlay_dir = out_dir / "optional_core_overlay_for_events"
         for doc_row in all_dialog_docs:
@@ -1646,34 +1572,22 @@ def build_vanilla_stock_map(
             },
         )
 
-    tools_dir = Path(__file__).resolve().parents[2] / "tools"
-    import sys as _sys
-
-    if str(tools_dir) not in _sys.path:
-        _sys.path.insert(0, str(tools_dir))
-
-    cores_to_patch = [stock_core]
-    if install_maps_dir is not None:
-        candidate = install_maps_dir.parent / "Core.zip"
-        if candidate.is_file() and candidate.resolve() != stock_core.resolve():
-            cores_to_patch.append(candidate)
-
     if optional_overlay_dir is not None:
+        import sys as _sys
+
+        tools_dir = Path(__file__).resolve().parents[3] / "tools"
+        if str(tools_dir) not in _sys.path:
+            _sys.path.insert(0, str(tools_dir))
         from install_vanilla_stock_event_dialog_overlay import install_dialog_overlay
 
+        cores_to_patch = [stock_core]
+        if install_maps_dir is not None:
+            candidate = install_maps_dir.parent / "Core.zip"
+            if candidate.is_file() and candidate.resolve() != stock_core.resolve():
+                cores_to_patch.append(candidate)
         for core_path in cores_to_patch:
             core_dialog_install_reports.append(
                 install_dialog_overlay(overlay_dir=optional_overlay_dir, core_zip=core_path)
-            )
-
-    if loc_tokens:
-        loc_tokens_path = out_dir / f"{sid}.custom_maps_loc_tokens.json"
-        write_json(loc_tokens_path, {"locTokens": loc_tokens})
-        from install_vanilla_stock_custom_maps_loc import install_custom_maps_loc
-
-        for core_path in cores_to_patch:
-            core_loc_install_reports.append(
-                install_custom_maps_loc(core_zip=core_path, tokens=loc_tokens)
             )
 
     out_map = out_dir / "maps" / f"{sid}.map"
@@ -1721,7 +1635,6 @@ def build_vanilla_stock_map(
         "sourceLayers": summary.get("layers"),
         "stockCore": str(stock_core),
         "templateMap": str(template_map),
-        "warnings": warnings,
         "outputMap": str(out_map),
         "installedMap": str(installed_path) if installed_path else None,
         "substitutionTable": copied_table.manifest(),
@@ -1835,11 +1748,18 @@ def build_vanilla_stock_map(
         },
         "spawns": meta["spawns"],
         "spawnSelection": spawn_selection_rows,
+        "ownershipContract": ownership_report,
+        "accessContract": access_report,
+        "sceneryCanonPostpass": scenery_postpass_report,
+        "serializationShape": {
+            "policy": "stock_template_plus_proven_native_empty_families",
+            "campaignInfoPreserved": True,
+            "objectsPropertiesKeys": sorted(props.keys()),
+            "proofBoundary": "generated_artifact_runtime_unvalidated",
+        },
         "coreOverlayEmitted": False,
         "coreOverlayOptionalEventsOnly": bool(all_dialog_docs),
         "coreDialogInstallReports": core_dialog_install_reports,
-        "coreLocInstallReports": core_loc_install_reports,
-        "questLocTokens": loc_tokens,
         "proofBoundary": (
             "generated_artifact_stock_sid_tile_water_gate_face_ground_truth_validated_"
             "runtime_unvalidated"
@@ -1884,20 +1804,16 @@ def main_emit_cli(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--h3m", type=Path, required=True)
     parser.add_argument("--out-dir", type=Path, required=True)
-    parser.add_argument("--stock-core", type=Path, required=DEFAULT_STOCK_CORE is None, default=DEFAULT_STOCK_CORE)
-    parser.add_argument(
-        "--template-map",
-        type=Path,
-        default=DEFAULT_STOCK_TEMPLATE_MAP,
-        help=(
-            "Optional stock .map shell. Default: StreamingAssets/maps/"
-            f"{STOCK_TEMPLATE_MAP_BASENAME} beside Core.zip "
-            "(or STOCK_TEMPLATE_MAP env)."
-        ),
-    )
+    parser.add_argument("--stock-core", type=Path, default=DEFAULT_STOCK_CORE)
+    parser.add_argument("--template-map", type=Path, default=DEFAULT_STOCK_TEMPLATE_MAP)
     parser.add_argument("--map-sid", type=str, default=None)
     parser.add_argument("--install-maps-dir", type=Path, default=None)
     parser.add_argument("--substitution-table", type=Path, default=DEFAULT_SUBSTITUTION_TABLE)
+    parser.add_argument(
+        "--enable-scenery-canon-postpass",
+        action="store_true",
+        help="Opt-in stock-only scenery diversify post-pass (disabled by default)",
+    )
     args = parser.parse_args(argv)
     manifest = build_vanilla_stock_map(
         h3m_path=args.h3m,
@@ -1907,17 +1823,9 @@ def main_emit_cli(argv: list[str] | None = None) -> int:
         map_sid=args.map_sid,
         install_maps_dir=args.install_maps_dir,
         substitution_table=args.substitution_table,
+        enable_scenery_canon_postpass=bool(args.enable_scenery_canon_postpass),
     )
-    warning_rows = list(manifest.get("warnings") or [])
-    summary = {
-        "mapSid": manifest["mapSid"],
-        "outputMap": manifest["outputMap"],
-        "installedMap": manifest["installedMap"],
-        "templateMap": manifest.get("templateMap"),
-        "warningCount": len(warning_rows),
-        "warnings": warning_rows,
-    }
-    print(json.dumps(summary, indent=2))
+    print(json.dumps({"mapSid": manifest["mapSid"], "outputMap": manifest["outputMap"], "installedMap": manifest["installedMap"]}, indent=2))
     return 0
 
 

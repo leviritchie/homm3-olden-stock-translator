@@ -1,9 +1,11 @@
 {
   "schema": "vanilla_stock.h3_neutral_strength_model.v1",
   "model": "h3_count_x_ge_h3_squadValue_v1",
-  "sourceStatus": "baked_ge_h3_unit_squadValue_snapshot",
-  "generatedDate": "2026-07-23",
-  "sourceNote": "Matches campaign GE formula: requestedValue = round_half_up(count_or_nominal * squadValue, 50). squadValue is a baked snapshot of Golden Era Core h3_ unit rows (ported H3 strength numbers in Olden value space \u2014 not game assets). Stock SpawnsCreator fills native units into that budget. Do not bake NeutralsDifficulty into requestedValue (isIgnoreMultiply / runtime multiply).",
+  "sourceStatus": "generated_artifact_validated_against_ge_core_h3_unit_rows",
+  "generatedDate": "2026-07-26",
+  "sourceNote": "Matches campaign GE formula: requestedValue = round_half_up(count_or_nominal * squadValue, 50). squadValue comes from Golden Era Core.zip h3_ unit rows (ported H3 strength in Olden value space). Stock SpawnsCreator fills native units into that budget; stock native tier medians are near h3_ medians. Do not bake NeutralsDifficulty into requestedValue (isIgnoreMultiply / runtime multiply).",
+  "geCoreZip": "V:\\SteamLibrary\\steamapps\\common\\Heroes of Might and Magic Olden Era - Golden Era\\HeroesOldenEra_Data\\StreamingAssets\\Core.zip",
+  "stockCoreZip": "V:\\SteamLibrary\\steamapps\\common\\Heroes of Might and Magic Olden Era\\HeroesOldenEra_Data\\StreamingAssets\\Core.zip",
   "nominalH3RandomStackCountsByLevel": {
     "1": 20,
     "2": 20,
@@ -15,13 +17,13 @@
   },
   "requestedValueRounding": 50.0,
   "tierMedianSquadValuesFromGeH3": {
-    "1": 82.0,
+    "1": 80.0,
     "2": 184.0,
     "3": 317.5,
-    "4": 572.0,
+    "4": 575.5,
     "5": 852.0,
-    "6": 1694.5,
-    "7": 5931.0
+    "6": 1670.0,
+    "7": 6433.0
   },
   "tierMedianSquadValuesFromStockNative": {
     "1": 72.5,
@@ -33,13 +35,13 @@
     "7": 5886.0
   },
   "randomTierNominalBudgets": {
-    "1": 1640.0,
+    "1": 1600.0,
     "2": 3680.0,
     "3": 4762.5,
-    "4": 5720.0,
+    "4": 5755.0,
     "5": 6816.0,
-    "6": 11861.5,
-    "7": 23724.0
+    "6": 11690.0,
+    "7": 25732.0
   },
   "creatureTypeSquadValuesFromGe": {
     "0": {
@@ -683,68 +685,68 @@
       "tier": 7
     },
     "132": {
-      "unitSid": "h3_gold_dragon",
-      "squadValue": 7600.0,
+      "unitSid": "h3_azure_dragon",
+      "squadValue": 78845.0,
       "tier": 7
     },
     "133": {
-      "unitSid": "h3_diamond_dragon_upg_alt",
-      "squadValue": 7469.0,
+      "unitSid": "h3_crystal_dragon",
+      "squadValue": 39338.0,
       "tier": 7
     },
     "134": {
-      "unitSid": "fairy_dragon",
-      "squadValue": 950.0,
-      "tier": 5
+      "unitSid": "h3_faerie_dragon",
+      "squadValue": 30501.0,
+      "tier": 7
     },
     "135": {
-      "unitSid": "h3_red_dragon",
-      "squadValue": 4702.0,
+      "unitSid": "h3_rust_dragon",
+      "squadValue": 26433.0,
       "tier": 7
     },
     "136": {
-      "unitSid": "h3_mage_upg",
-      "squadValue": 680.0,
-      "tier": 4
+      "unitSid": "h3_enchanter",
+      "squadValue": 1210.0,
+      "tier": 6
     },
     "137": {
-      "unitSid": "h3_archer_upg",
-      "squadValue": 184.0,
-      "tier": 2
+      "unitSid": "h3_sharpshooter",
+      "squadValue": 585.0,
+      "tier": 4
     },
     "138": {
-      "unitSid": "halfling",
-      "squadValue": 125.0,
-      "tier": 2
+      "unitSid": "h3_neutral_halfling",
+      "squadValue": 75.0,
+      "tier": 1
     },
     "139": {
-      "unitSid": "peasant",
-      "squadValue": 125.0,
-      "tier": 2
+      "unitSid": "h3_peasant",
+      "squadValue": 15.0,
+      "tier": 1
     },
     "140": {
-      "unitSid": "h3_wolf_rider",
-      "squadValue": 130.0,
+      "unitSid": "h3_boar",
+      "squadValue": 154.0,
       "tier": 2
     },
     "141": {
-      "unitSid": "h3_walking_dead",
-      "squadValue": 98.0,
-      "tier": 2
+      "unitSid": "h3_mummy",
+      "squadValue": 270.0,
+      "tier": 3
     },
     "142": {
-      "unitSid": "h3_cavalier",
-      "squadValue": 1946.0,
-      "tier": 6
+      "unitSid": "h3_nomad",
+      "squadValue": 345.0,
+      "tier": 3
     },
     "143": {
-      "unitSid": "h3_swordsman",
-      "squadValue": 445.0,
-      "tier": 4
+      "unitSid": "h3_rogue",
+      "squadValue": 135.0,
+      "tier": 2
     },
     "144": {
-      "unitSid": "h3_ogre",
-      "squadValue": 416.0,
+      "unitSid": "h3_troll",
+      "squadValue": 1024.0,
       "tier": 4
     }
   }

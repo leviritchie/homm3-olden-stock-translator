@@ -18,6 +18,7 @@ INCLUDE = [
     "src",
     "tools",
     "examples",
+    "scenarios",
     "user_maps/README.md",
 ]
 SKIP_DIR_NAMES = {".git", ".runtime", "artifacts", "release_dist", "__pycache__", ".venv", "venv"}

@@ -35,7 +35,7 @@ verified). There is no custom translator `.exe`.
   -InstallMapsDir "D:\Steam\steamapps\common\Heroes of Might and Magic Olden Era\HeroesOldenEra_Data\StreamingAssets\maps"
 ```
 
-## Substitions
+## Substitutions
 
 - Oceans are dried up, instead becoming pathable sand terrain at a reduced elevation.
 - Underground layers are simulated using extra large maps with sections separated by portals
@@ -47,6 +47,21 @@ verified). There is no custom translator `.exe`.
 - Maps with events will merge a text-only dialog overlays into `Core.zip`
   (a backup is created once). This means some events may break when the game is patched, until you run the utility again.
 
+## Players, towns, and access (v0.1.5+)
+
+Olden expects compact player seats (`1..N` with the human as owner `1`). The
+translator now derives final owners **after** town bindings:
+
+- Mixed-faction AI town sets can split onto extra Olden seats (or demote minority
+  towns to neutral when seats `1..8` are exhausted).
+- Orphan AI / playable sides with heroes but no town can bind a nearby neutral town.
+- Owners are then renumbered to the compact native scheme; victory and timed-event
+  audiences follow those final seats (including expanded audiences when one H3
+  color became multiple Olden owners).
+- Stock-safe clearance keeps subterranean portal gates and town south-approach
+  cells walkable (no Golden Era-only objects).
+- Optional scenery diversify post-pass: `--enable-scenery-canon-postpass`.
+
 ## Neutral army strength
 
 Heroes 3 and Olden Era use different systems to represent neutral stack strength. The utility calibrates this reasonably closely.
@@ -55,6 +70,20 @@ Your mileage may vary depending on the scenario.
 Budgets use `requestedValue = round(H3_count_or_nominal × squadValue, 50)` with a
 baked snapshot of Golden Era `h3_` unit economy numbers (balance constants, not
 game assets). SpawnsCreator fills fights with Olden Era units instead of H3 units.
+
+## Regression sample (contributors)
+
+A RoE / AB / SoD fingerprint suite lives under `scenarios/vanilla_stock/`
+(HotA rows soft-optional). With local HoMM3 maps + stock `Core.zip` paths filled
+in the manifest:
+
+```powershell
+python tools/build_vanilla_stock_regression.py
+python tools/validate_vanilla_stock_regression_contract.py
+```
+
+See `scenarios/vanilla_stock/README_regression.md`. This checks generated-artifact
+metrics only; it does not prove in-game load or gameplay.
 
 ## License
 

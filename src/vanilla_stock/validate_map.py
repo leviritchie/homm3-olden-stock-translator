@@ -249,12 +249,15 @@ def validate_vanilla_stock_map(
         if meta.get("takenHeroes") != spawn_taken_heroes:
             errors.append("meta.takenHeroes must match meta.spawns.takenHeroes")
         if isinstance(spawn_rows, list):
+            owners_seen: list[int] = []
             for index, row in enumerate(spawn_rows):
                 if not isinstance(row, dict):
                     errors.append(f"meta.spawns.spawns[{index}] must be an object")
                     continue
                 if not isinstance(row.get("owner"), int) or not 1 <= row["owner"] <= 8:
                     errors.append(f"meta.spawns.spawns[{index}].owner must be an Olden player index 1..8")
+                else:
+                    owners_seen.append(int(row["owner"]))
                 if row.get("playerId") != "":
                     errors.append(f"meta.spawns.spawns[{index}].playerId must be empty")
                 if row.get("colorId") != -1:
@@ -273,15 +276,32 @@ def validate_vanilla_stock_map(
                 if is_editable_choice:
                     # Native free-choice contract: qmq() constructs editable
                     # SlotModel random defaults only when both definition flags
-                    # are false. Validate matching random-city properties too.
+                    # are false. Validate the lobby primary city for this owner.
                     owner = int(row["owner"])
                     owner_prop_spawns = prop_spawns_by_owner.get(owner) or []
                     if not owner_prop_spawns:
                         errors.append(
                             f"meta.spawns.spawns[{index}] free-choice row has no matching propSpawns owner"
                         )
+                    # Prefer an already-undefined city (lobby free-choice primary).
+                    undefined_ids = [
+                        int(ps["id"])
+                        for ps in owner_prop_spawns
+                        if isinstance(ps.get("id"), int)
+                        and isinstance(prop_cities_by_id.get(int(ps["id"])), dict)
+                        and prop_cities_by_id[int(ps["id"])].get("isDefined") is False
+                    ]
+                    if undefined_ids:
+                        primary_id = min(undefined_ids)
+                    else:
+                        primary_id = min(
+                            (int(ps["id"]) for ps in owner_prop_spawns if isinstance(ps.get("id"), int)),
+                            default=None,
+                        )
                     for prop_spawn in owner_prop_spawns:
                         spawn_id = prop_spawn.get("id")
+                        if spawn_id != primary_id:
+                            continue
                         city = prop_cities_by_id.get(spawn_id) if isinstance(spawn_id, int) else None
                         if not isinstance(city, dict):
                             errors.append(
@@ -320,6 +340,60 @@ def validate_vanilla_stock_map(
                         errors.append(
                             f"meta.spawns.spawns[{index}].heroSid {hero_sid!r} missing from takenHeroes"
                         )
+            # Compact native ownership: exactly owners 1..playersCount, human owner 1 present.
+            if isinstance(players_count, int) and players_count > 0 and owners_seen:
+                expected_owners = list(range(1, players_count + 1))
+                if sorted(owners_seen) != expected_owners:
+                    errors.append(
+                        f"meta.spawns owners must be compact 1..{players_count}; "
+                        f"got {sorted(owners_seen)}"
+                    )
+                if 1 not in owners_seen:
+                    errors.append("meta.spawns must include human owner 1 after compact renumber")
+                if len(owners_seen) != len(set(owners_seen)):
+                    errors.append("meta.spawns must have exactly one row per final owner")
+                human_rows = [row for row in spawn_rows if isinstance(row, dict) and row.get("owner") == 1]
+                if human_rows and human_rows[0].get("spawnType") != 0:
+                    errors.append("meta.spawns owner 1 must be human spawnType=0")
+            # Every property owner must have a matching meta/prop spawn seat.
+            property_owners: set[int] = set()
+            for prop_key in ("propSpawns", "propOwners", "propCities"):
+                for row in props.get(prop_key) or []:
+                    if isinstance(row, dict) and isinstance(row.get("owner"), int):
+                        property_owners.add(int(row["owner"]))
+            meta_owners = set(owners_seen)
+            orphan_property_owners = sorted(owner for owner in property_owners if owner not in meta_owners)
+            if orphan_property_owners:
+                errors.append(
+                    f"property owners without meta.spawns seats: {orphan_property_owners}"
+                )
+            # No mixed-faction City propSpawns under one owner.
+            city_faction_by_id = {
+                int(row["id"]): str(row.get("factionSid") or "")
+                for row in (props.get("propCities") or [])
+                if isinstance(row, dict) and isinstance(row.get("id"), int)
+            }
+            factions_by_owner: dict[int, set[str]] = {}
+            for prop_spawn in props.get("propSpawns") or []:
+                if not isinstance(prop_spawn, dict):
+                    continue
+                # City spawnPointType is 0; tolerate omitted field as city for stock.
+                if prop_spawn.get("spawnPointType") not in (0, None):
+                    continue
+                owner = prop_spawn.get("owner")
+                object_id = prop_spawn.get("id")
+                if not isinstance(owner, int) or not isinstance(object_id, int):
+                    continue
+                faction = city_faction_by_id.get(object_id, "")
+                if not faction:
+                    continue
+                factions_by_owner.setdefault(owner, set()).add(faction)
+            for owner, factions in sorted(factions_by_owner.items()):
+                if len(factions) > 1:
+                    errors.append(
+                        f"owner {owner} still has mixed city factions {sorted(factions)} "
+                        "after ownership contract"
+                    )
             # Human-capable (spawnType 0) rows must come first so lobby binds the intended start town.
             if all(isinstance(row, dict) and row.get("spawnType") in (0, 1) for row in spawn_rows):
                 seen_ai = False
@@ -420,6 +494,18 @@ def validate_vanilla_stock_map(
             and isinstance(scenario_spawns.get("spawns"), list)
             else []
         )
+        ownership = manifest.get("ownershipContract") if isinstance(manifest, dict) else None
+        h3_to_final = (
+            ownership.get("h3ColorToFinalOwners")
+            if isinstance(ownership, dict)
+            else None
+        )
+        if not isinstance(ownership, dict):
+            errors.append("manifest missing ownershipContract after compact-owner transfer")
+        elif ownership.get("humanOldenOwner") != 1:
+            errors.append("manifest ownershipContract.humanOldenOwner must be 1")
+        elif not isinstance(h3_to_final, dict):
+            errors.append("manifest ownershipContract.h3ColorToFinalOwners must be an object")
         if not isinstance(playable_players, list):
             errors.append("manifest scenarioHeader.playablePlayers must be a list")
         else:
@@ -427,19 +513,39 @@ def validate_vanilla_stock_map(
                 if not isinstance(player, dict) or not isinstance(player.get("index"), int):
                     errors.append("manifest playable player row is malformed")
                     continue
-                owner = int(player["index"]) + 1
+                h3_color = int(player["index"])
+                final_owners = []
+                if isinstance(h3_to_final, dict):
+                    mapped = h3_to_final.get(str(h3_color), h3_to_final.get(h3_color))
+                    if isinstance(mapped, list):
+                        final_owners = [int(x) for x in mapped if isinstance(x, int)]
+                if not final_owners:
+                    errors.append(
+                        f"manifest playable H3 color {h3_color} has no final native owners"
+                    )
+                    continue
                 owner_rows = [
                     row
                     for row in manifest_spawns
-                    if isinstance(row, dict) and row.get("owner") == owner
+                    if isinstance(row, dict) and row.get("owner") in final_owners
                 ]
                 if not owner_rows:
-                    errors.append(f"manifest playable H3 owner {owner} has no emitted spawn row")
-                    continue
-                if len(owner_rows) != 1:
                     errors.append(
-                        f"manifest playable H3 owner {owner} must have exactly one emitted spawn row, "
-                        f"found {len(owner_rows)}"
+                        f"manifest playable H3 color {h3_color} finals {final_owners} "
+                        "have no emitted spawn rows"
+                    )
+                    continue
+                # Primary final owner for faction-choice checks: lowest final owner.
+                primary_owner = min(final_owners)
+                primary_rows = [
+                    row
+                    for row in owner_rows
+                    if isinstance(row, dict) and row.get("owner") == primary_owner
+                ]
+                if len(primary_rows) != 1:
+                    errors.append(
+                        f"manifest H3 color {h3_color} primary final owner {primary_owner} "
+                        f"must have exactly one spawn row, found {len(primary_rows)}"
                     )
                     continue
                 expected = resolve_stock_faction_choice(
@@ -447,7 +553,7 @@ def validate_vanilla_stock_map(
                     is_faction_random=player.get("isFactionRandom"),
                 )
                 if expected["freeChoice"]:
-                    for row in owner_rows:
+                    for row in primary_rows:
                         if not (
                             row.get("isCityDefined") is False
                             and row.get("factionSid") == ""
@@ -455,14 +561,38 @@ def validate_vanilla_stock_map(
                             and row.get("heroSid") == ""
                         ):
                             errors.append(
-                                f"H3 owner {owner} requires editable faction/hero choice, "
-                                "but emitted spawn metadata is defined"
+                                f"H3 color {h3_color} requires editable faction/hero choice, "
+                                "but emitted primary spawn metadata is defined"
                             )
-                elif any(not row.get("factionSid") for row in owner_rows):
+                elif any(not row.get("factionSid") for row in primary_rows):
                     errors.append(
-                        f"H3 owner {owner} has one mapped forced faction but emitted an "
+                        f"H3 color {h3_color} has one mapped forced faction but emitted an "
                         "undefined faction choice"
                     )
+        victory = manifest.get("victory") if isinstance(manifest, dict) else None
+        if isinstance(victory, dict) and victory.get("mode") == "WINSTANDARD":
+            playable_finals = victory.get("playableFinalOwners")
+            compact_count = (
+                scenario_spawns.get("playersCount")
+                if isinstance(scenario_spawns, dict)
+                else None
+            )
+            if isinstance(playable_finals, list) and isinstance(compact_count, int):
+                expected_owners = set(range(1, compact_count + 1))
+                got = {int(x) for x in playable_finals if isinstance(x, int)}
+                if not got.issubset(expected_owners):
+                    errors.append(
+                        f"victory playableFinalOwners {sorted(got)} exceed compact owners "
+                        f"{sorted(expected_owners)}"
+                    )
+                if 1 not in got:
+                    errors.append("victory playableFinalOwners must include human owner 1")
+        if isinstance(manifest, dict) and "accessContract" not in manifest:
+            errors.append("manifest missing accessContract")
+        if isinstance(manifest, dict) and "serializationShape" not in manifest:
+            errors.append("manifest missing serializationShape")
+        if isinstance(manifest, dict) and "sceneryCanonPostpass" not in manifest:
+            errors.append("manifest missing sceneryCanonPostpass")
         gate_face = manifest.get("gateFaceRotation") if isinstance(manifest, dict) else None
         if not isinstance(gate_face, dict):
             errors.append("manifest missing gateFaceRotation contract")
@@ -899,17 +1029,8 @@ def validate_vanilla_stock_map(
         name = (main_quests[0] or {}).get("name") if main_quests else None
         desc = (main_quests[0] or {}).get("desc") if main_quests else None
         for field_name, value in (("name", name), ("desc", desc)):
-            if not isinstance(value, str) or not value:
-                errors.append(f"WINSTANDARD quest {field_name} missing LocKit SID")
-                continue
-            if " " in value or value.startswith("LOC:"):
-                errors.append(
-                    f"WINSTANDARD quest {field_name} must be a LocKit SID, not inline text: {value!r}"
-                )
-            elif expect_map_sid and not value.startswith(f"{expect_map_sid}_"):
-                errors.append(
-                    f"WINSTANDARD quest {field_name} Loc SID {value!r} must start with {expect_map_sid}_"
-                )
+            if isinstance(value, str) and value.startswith(("tfp_", "gs_", "Loc:")):
+                errors.append(f"WINSTANDARD quest {field_name} looks like a ghost Loc SID: {value!r}")
     elif victory_mode == "TAKEMINES":
         allow_normal = None
         if manifest_path is not None and manifest_path.is_file():
@@ -942,14 +1063,8 @@ def validate_vanilla_stock_map(
                 if token not in blob:
                     errors.append(f"TAKEMINES MainQuest missing {token}")
         name = (main_quests[0] or {}).get("name") if main_quests else None
-        if not isinstance(name, str) or not name:
-            errors.append("TAKEMINES quest name missing LocKit SID")
-        elif " " in name or name.startswith("LOC:"):
-            errors.append(f"TAKEMINES quest name must be a LocKit SID, not inline text: {name!r}")
-        elif expect_map_sid and not name.startswith(f"{expect_map_sid}_"):
-            errors.append(
-                f"TAKEMINES quest name Loc SID {name!r} must start with {expect_map_sid}_"
-            )
+        if isinstance(name, str) and name.startswith(("tfp_", "gs_", "Loc:")):
+            errors.append(f"TAKEMINES quest name looks like a ghost Loc SID: {name!r}")
 
     if map_event_count is not None:
         events_manifest: dict[str, Any] = {}

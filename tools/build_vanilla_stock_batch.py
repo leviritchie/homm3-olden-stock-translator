@@ -48,6 +48,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=REPO)
     parser.add_argument("--install", action="store_true", help="Also copy built maps into stock maps/")
     parser.add_argument("--only", action="append", default=[], help="Restrict to scenario id(s)")
+    parser.add_argument(
+        "--enable-scenery-canon-postpass",
+        action="store_true",
+        help="Opt-in stock-only scenery diversify post-pass",
+    )
     args = parser.parse_args(argv)
 
     repo_root = args.repo_root.resolve()
@@ -60,8 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         base=repo_root,
     )
     stock_core = _resolve(batch.get("stockCore") or DEFAULT_STOCK_CORE, base=repo_root)
-    template_raw = batch.get("templateMap") or DEFAULT_STOCK_TEMPLATE_MAP
-    template_map = _resolve(template_raw, base=repo_root) if template_raw else None
+    template_map = _resolve(batch.get("templateMap") or DEFAULT_STOCK_TEMPLATE_MAP, base=repo_root)
     install_dir = None
     if args.install:
         install_dir = _resolve(batch.get("installMapsDir") or DEFAULT_STOCK_MAPS_DIR, base=repo_root)
@@ -92,8 +96,26 @@ def main(argv: list[str] | None = None) -> int:
                 out_dir=out_dir,
                 map_sid=map_sid,
                 install_maps_dir=install_dir,
+                enable_scenery_canon_postpass=bool(args.enable_scenery_canon_postpass),
             )
         except Exception as ex:  # noqa: BLE001 - batch must report each failure
+            role = str(row.get("role") or "")
+            optional = role == "fan_import" or bool(row.get("buildOptional"))
+            if optional:
+                print(
+                    f"OPTIONAL FAIL {scenario_id}: {type(ex).__name__}: {ex}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                results.append(
+                    {
+                        "id": scenario_id,
+                        "ok": False,
+                        "optionalFailure": True,
+                        "error": f"{type(ex).__name__}: {ex}",
+                    }
+                )
+                continue
             failures += 1
             print(f"FAIL {scenario_id}: {type(ex).__name__}: {ex}", file=sys.stderr, flush=True)
             results.append({"id": scenario_id, "ok": False, "error": f"{type(ex).__name__}: {ex}"})

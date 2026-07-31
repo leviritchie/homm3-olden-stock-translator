@@ -1,0 +1,129 @@
+{
+  "schema": "homm3.vanilla_stock.regression_fingerprint.v1",
+  "id": "twins",
+  "mapSid": "vanilla_stock_twins",
+  "era": "AB",
+  "formatVersion": 21,
+  "sourceSize": 36,
+  "sourceLayers": 2,
+  "playersCount": 2,
+  "humanOwner": 1,
+  "h3ColorToFinalOwners": {
+    "0": [
+      1
+    ],
+    "1": [
+      2
+    ]
+  },
+  "ownerRenumberMapping": {
+    "1": 1,
+    "2": 2
+  },
+  "factionSplitRemappedObjectCount": 0,
+  "demotedMixedFactionCityCount": 0,
+  "orphanAiBoundCount": 0,
+  "orphanPlayableBoundCount": 0,
+  "victoryMode": "WINSTANDARD",
+  "mineEntityCount": null,
+  "playableFinalOwners": [
+    1,
+    2
+  ],
+  "humanFinalOwners": [
+    1,
+    2
+  ],
+  "defeatAllEnemiesEnabled": true,
+  "spawnRows": [
+    {
+      "owner": 1,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 2,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    }
+  ],
+  "eventCount": 6,
+  "unguardedEventCount": 3,
+  "guardedEventCount": 3,
+  "giveResActionCount": 6,
+  "omittedRewardGapKinds": [
+    "stock maps prove ChangeManaHero only with a named hero entity SID; no AddMana / interacting-hero mana donor for map-event visits"
+  ],
+  "timedBriefingCount": 1,
+  "timedGrantCount": 0,
+  "timedOmittedGapKinds": [],
+  "emittedInstanceCount": 1492,
+  "cityCount": 2,
+  "portalCount": 2,
+  "mineCount": 19,
+  "mapEventCount": 6,
+  "randomSquadCount": 47,
+  "randomItemCount": 17,
+  "omitReasonHistogram": {
+    "corpse_deferred_omit_mvp": 1,
+    "creature_bank_deferred_omit_mvp": 5,
+    "crypt_bank_deferred_omit_mvp": 1,
+    "garrison_army_payload_deferred_omit_mvp": 2,
+    "object_anchor_outside_source_envelope_omit_mvp": 12,
+    "random_dwelling_decoder_unsupported_omit_mvp": 4,
+    "random_dwelling_lvl_unsupported_omit_mvp": 1,
+    "random_hero_omit_mvp_use_city_spawns": 2,
+    "seer_hut_omitted_no_stock_interactable": 1,
+    "sign_message_deferred_omit_mvp": 1,
+    "unmapped_mine_subtype_7_omit_mvp": 2,
+    "unmapped_template_object_id_10_omit_mvp": 6,
+    "unmapped_template_object_id_13_omit_mvp": 1,
+    "unmapped_template_object_id_155_omit_mvp": 4,
+    "unmapped_template_object_id_35_omit_mvp": 1,
+    "unmapped_template_object_id_57_omit_mvp": 6,
+    "unmapped_template_object_id_78_omit_mvp": 1,
+    "unmapped_template_object_id_95_omit_mvp": 1,
+    "unmapped_template_object_id_9_omit_mvp": 4,
+    "warriors_tomb_deferred_omit_mvp": 1
+  },
+  "accessPortalClearedCount": 0,
+  "accessTownApproachClearedCount": 0,
+  "sceneryFootprintPlacementCount": 786,
+  "objectsPropertiesKeys": [
+    "propActionsAfter",
+    "propActionsBefore",
+    "propActionsLegacy",
+    "propActivations",
+    "propAiIntetactions",
+    "propAiIntetated",
+    "propCities",
+    "propCitiesHold",
+    "propComments",
+    "propDialogWindows",
+    "propEntities",
+    "propGrowthUnits",
+    "propHeroes",
+    "propMainObjects",
+    "propMarkers",
+    "propNoCombineGeometries",
+    "propOwners",
+    "propPortals",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propRandomHires",
+    "propRandomItems",
+    "propRandomSquads",
+    "propResParams",
+    "propResources",
+    "propRewardParams",
+    "propSpawns",
+    "propSquads",
+    "propVariants",
+    "propsName"
+  ],
+  "campaignInfoPreserved": true
+}

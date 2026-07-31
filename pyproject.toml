@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "homm3-olden-stock-translator"
-version = "0.1.0"
+version = "0.1.5"
 description = "Translate HoMM3 .h3m scenarios into stock-legal Heroes of Might and Magic: Olden Era .map files"
 readme = "README.md"
 requires-python = ">=3.10"

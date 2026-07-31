@@ -99,31 +99,27 @@ def _counter_row(sid: str, *, comment: str, value: int = 0) -> dict[str, Any]:
     }
 
 
-def _player_defeated_condition(player_index: int) -> dict[str, Any]:
-    # Olden QuestScript uses 1-based side indices in Thirst (player 0 → "1").
+def _player_defeated_condition(olden_owner: int) -> dict[str, Any]:
+    # Olden QuestScript uses 1-based side indices in Thirst (owner 1 → "1").
+    if not isinstance(olden_owner, int) or olden_owner < 1:
+        raise VanillaStockVictoryError(
+            f"PlayerDefeated requires final native owner >= 1; got {olden_owner!r}"
+        )
     return {
         "comment": "",
-        "p": [str(player_index + 1)],
+        "p": [str(olden_owner)],
         "counter": 1,
         "c": "PlayerDefeated",
     }
 
 
-def _loc_token(sid: str, text: str) -> dict[str, str]:
-    return {"sid": sid, "text": text}
-
-
 def build_winstandard_quest_script(
     *,
-    map_sid: str,
     map_title: str,
     header: dict[str, Any],
+    h3_color_to_final_owners: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
-    """Thirst-style: when every other playable side is defeated → GameVictory.
-
-    Quest name/desc fields are LocKit SIDs (customMaps.json), matching stock maps.
-    Inline English here shows in-game as ``LOC:<text>``.
-    """
+    """Thirst-style: when every other playable side is defeated → GameVictory."""
 
     playable = playable_player_indices(header)
     humans = human_capable_player_indices(header)
@@ -133,28 +129,50 @@ def build_winstandard_quest_script(
         raise VanillaStockVictoryError(
             "WINSTANDARD quest requires at least two playable H3 players to defeat"
         )
+    mapping = h3_color_to_final_owners or {}
+    if not mapping:
+        # Legacy color+1 fallback is intentionally refused: compact ownership is required.
+        raise VanillaStockVictoryError(
+            "WINSTANDARD requires h3_color_to_final_owners from ownership contract"
+        )
 
-    name_sid = f"{map_sid}_quest_name"
-    desc_sid = f"{map_sid}_quest_desc"
-    sub_name_sid = f"{map_sid}_sub_defeat_all"
-    name_text = "Defeat all enemies"
-    desc_text = f"Capture all enemy towns and defeat all enemy heroes on {map_title}."
-    sub_name_text = "Defeat all enemies"
+    def finals_for(h3_colors: list[int]) -> list[int]:
+        out: list[int] = []
+        for color in h3_colors:
+            mapped = mapping.get(int(color))
+            if not mapped:
+                raise VanillaStockVictoryError(
+                    f"WINSTANDARD H3 color {color} missing from ownership mapping"
+                )
+            for owner in mapped:
+                if owner not in out:
+                    out.append(owner)
+        return sorted(out)
+
+    human_finals = finals_for(humans)
+    if 1 not in human_finals:
+        raise VanillaStockVictoryError(
+            f"WINSTANDARD human finals {human_finals} must include compact owner 1"
+        )
+    all_finals = finals_for(playable)
 
     subquests: list[dict[str, Any]] = []
-    for human in humans:
-        others = [p for p in playable if p != human]
+    for human_owner in human_finals:
+        others = [owner for owner in all_finals if owner != human_owner]
         if not others:
             continue
-        conditions = [_player_defeated_condition(p) for p in others]
+        conditions = [_player_defeated_condition(owner) for owner in others]
         subquests.append(
             {
-                "sid": f"MainQuest_defeat_as_p{human}",
+                "sid": f"MainQuest_defeat_as_p{human_owner}",
                 "activeOnStart": True,
                 "hidden": False,
-                "name": sub_name_sid,
+                "name": "Defeat all enemies",
                 "desc": "",
-                "comment": f"WINSTANDARD: player {human} wins when other playable sides are defeated",
+                "comment": (
+                    f"WINSTANDARD: native owner {human_owner} wins when other "
+                    f"playable sides are defeated"
+                ),
                 "triggers": [
                     {
                         "comment": "",
@@ -178,28 +196,23 @@ def build_winstandard_quest_script(
         "comment": "vanilla_stock WINSTANDARD → DefeatAll + PlayerDefeated → GameVictory",
         "main": True,
         "hidden": False,
-        "name": name_sid,
-        "desc": desc_sid,
+        "name": "Defeat all enemies",
+        "desc": f"Capture all enemy towns and defeat all enemy heroes on {map_title}.",
         "sharing": "Clone",
         "subQuests": subquests,
     }
     return {
         "counters": [],
         "quests": [quest],
-        "objectiveText": desc_text,
-        "objectiveLocSid": desc_sid,
+        "objectiveText": quest["desc"],
         "defeatAllEnemiesEnabled": True,
-        "locTokens": [
-            _loc_token(name_sid, name_text),
-            _loc_token(desc_sid, desc_text),
-            _loc_token(sub_name_sid, sub_name_text),
-        ],
+        "humanFinalOwners": human_finals,
+        "playableFinalOwners": all_finals,
     }
 
 
 def build_takemines_quest_script(
     *,
-    map_sid: str,
     map_title: str,
     mine_entity_sids: list[str],
     allow_normal_victory: bool,
@@ -275,28 +288,21 @@ def build_takemines_quest_script(
         "conditionsLogic": "And",
     }
 
-    name_sid = f"{map_sid}_quest_name"
-    desc_sid = f"{map_sid}_quest_desc"
-    track_sid = f"{map_sid}_sub_capture_mines"
-    hold_sid = f"{map_sid}_sub_hold_mines"
-    name_text = "Flag all mines"
-    desc_text = f"Control all {needed} mines on {map_title}."
-
     quest = {
         "sid": MAIN_QUEST_SID,
         "activeOnStart": True,
         "comment": "vanilla_stock TAKEMINES → ObjectCaptureEntity/ObjectLose counter → GameVictory",
         "main": True,
         "hidden": False,
-        "name": name_sid,
-        "desc": desc_sid,
+        "name": "Flag all mines",
+        "desc": f"Control all {needed} mines on {map_title}.",
         "sharing": "Clone",
         "subQuests": [
             {
                 "sid": "MainQuest_mines_track",
                 "activeOnStart": True,
                 "hidden": False,
-                "name": track_sid,
+                "name": "Capture mines",
                 "desc": "",
                 "comment": "",
                 "triggers": capture_triggers + lose_triggers,
@@ -305,7 +311,7 @@ def build_takemines_quest_script(
                 "sid": "MainQuest_mines_victory",
                 "activeOnStart": True,
                 "hidden": False,
-                "name": hold_sid,
+                "name": "Hold every mine",
                 "desc": "",
                 "comment": "",
                 "triggers": [victory_trigger],
@@ -320,30 +326,23 @@ def build_takemines_quest_script(
             )
         ],
         "quests": [quest],
-        "objectiveText": desc_text,
-        "objectiveLocSid": desc_sid,
+        "objectiveText": quest["desc"],
         "defeatAllEnemiesEnabled": bool(allow_normal_victory),
         "mineEntityCount": needed,
         "mineEntitySids": list(mine_entity_sids),
-        "locTokens": [
-            _loc_token(name_sid, name_text),
-            _loc_token(desc_sid, desc_text),
-            _loc_token(track_sid, "Capture mines"),
-            _loc_token(hold_sid, "Hold every mine"),
-        ],
     }
 
 
 def apply_victory_contract(
     *,
     header: dict[str, Any],
-    map_sid: str,
     map_title: str,
     meta: dict[str, Any],
     map_data: dict[str, Any],
     props: dict[str, Any],
     emitted_mine_object_ids: list[int],
     source_mine_record_count: int,
+    h3_color_to_final_owners: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Clear leftovers and emit intentional victory for supported H3 conditions."""
 
@@ -351,89 +350,92 @@ def apply_victory_contract(
     victory = header.get("victory") or {}
     victory_type = int(victory.get("type"))
     victory_name = str(victory.get("name") or "")
-    fallback_warning: str | None = None
 
     if victory_type == h3m.VICTORY_WINSTANDARD:
         built = build_winstandard_quest_script(
-            map_sid=map_sid, map_title=map_title, header=header
+            map_title=map_title,
+            header=header,
+            h3_color_to_final_owners=h3_color_to_final_owners,
         )
         mode = "WINSTANDARD"
     elif victory_type == h3m.VICTORY_TAKEMINES:
-        if source_mine_record_count <= 0 or len(emitted_mine_object_ids) != source_mine_record_count:
-            built = build_winstandard_quest_script(
-                map_sid=map_sid, map_title=map_title, header=header
+        if source_mine_record_count <= 0:
+            raise VanillaStockVictoryError("TAKEMINES map has no mine/abandoned-mine object records")
+        if len(emitted_mine_object_ids) != source_mine_record_count:
+            raise VanillaStockVictoryError(
+                "TAKEMINES mine entity coverage incomplete: "
+                f"emitted {len(emitted_mine_object_ids)} of {source_mine_record_count} source mine records"
             )
-            mode = "WINSTANDARD_FALLBACK"
-            fallback_warning = (
-                f"TAKEMINES victory incomplete "
-                f"(emitted {len(emitted_mine_object_ids)} of {source_mine_record_count} mines); "
-                "falling back to DefeatAll / WINSTANDARD"
+        entity_sids = [f"mine{i + 1}" for i in range(len(emitted_mine_object_ids))]
+        for object_id, entity_sid in zip(emitted_mine_object_ids, entity_sids):
+            props.setdefault("propEntities", []).append(
+                {"type": 0, "id": int(object_id), "sid": entity_sid}
             )
-        else:
-            entity_sids = [f"mine{i + 1}" for i in range(len(emitted_mine_object_ids))]
-            for object_id, entity_sid in zip(emitted_mine_object_ids, entity_sids):
-                props.setdefault("propEntities", []).append(
-                    {"type": 0, "id": int(object_id), "sid": entity_sid}
-                )
-            allow_normal = bool(victory.get("allowNormalVictory"))
-            built = build_takemines_quest_script(
-                map_sid=map_sid,
-                map_title=map_title,
-                mine_entity_sids=entity_sids,
-                allow_normal_victory=allow_normal,
-            )
-            mode = "TAKEMINES"
-    else:
-        # Unsupported special victory → still emit a playable DefeatAll map.
-        built = build_winstandard_quest_script(
-            map_sid=map_sid, map_title=map_title, header=header
+        allow_normal = bool(victory.get("allowNormalVictory"))
+        built = build_takemines_quest_script(
+            map_title=map_title,
+            mine_entity_sids=entity_sids,
+            allow_normal_victory=allow_normal,
         )
-        mode = "WINSTANDARD_FALLBACK"
-        fallback_warning = (
-            f"unsupported victory condition {victory_name} ({victory_type}); "
-            "falling back to DefeatAll / WINSTANDARD"
+        mode = "TAKEMINES"
+    else:
+        raise VanillaStockVictoryError(
+            f"vanilla_stock pilot does not yet emit victory condition {victory_name} ({victory_type}); "
+            "extend after WINSTANDARD/TAKEMINES pilot is solid"
         )
 
     start_settings = meta.setdefault("startSettings", {})
     start_settings["DefeatAllEnemiesEnabled"] = bool(built["defeatAllEnemiesEnabled"])
-    # displayWinCondition is also resolved through LocKit (not plain English).
-    meta["displayWinCondition"] = str(built.get("objectiveLocSid") or "")
+    meta["displayWinCondition"] = str(built.get("objectiveText") or "")
     map_data["mapDesc"] = meta.get("desc") or map_data.get("mapDesc") or ""
 
-    result = {
+    return {
         "mode": mode,
         "victoryName": victory_name,
         "allowNormalVictory": victory.get("allowNormalVictory"),
         "lossName": (header.get("loss") or {}).get("name"),
         "defeatAllEnemiesEnabled": built["defeatAllEnemiesEnabled"],
         "objectiveText": built.get("objectiveText"),
-        "objectiveLocSid": built.get("objectiveLocSid"),
         "counters": built.get("counters") or [],
         "quests": built.get("quests") or [],
-        "mineEntityCount": built.get("mineEntityCount") or 0,
+        "mineEntityCount": built.get("mineEntityCount"),
         "mineEntitySids": built.get("mineEntitySids"),
-        "locTokens": list(built.get("locTokens") or []),
+        "humanFinalOwners": built.get("humanFinalOwners"),
+        "playableFinalOwners": built.get("playableFinalOwners"),
     }
-    if mode == "WINSTANDARD_FALLBACK":
-        result["warning"] = fallback_warning
-    return result
 
 
-def h3_players_mask_to_sides(players_mask: Any) -> str:
-    """Encode H3 playersMask for propActions*.sides (stock-native shape).
+def h3_players_mask_to_sides(
+    players_mask: Any,
+    *,
+    h3_color_to_final_owners: dict[int, list[int]] | None = None,
+) -> str:
+    """Encode H3 playersMask for propActions*.sides using final native owners.
 
     Native Story/custom maps use ``sides: \"\"`` for all-players Dialog hosts.
-    Partial masks use zero-based CSV (see campaign_event_ir.audience_encode).
-    Never emit one-based indices here — that mismatches PropActionsBase.
+    Partial masks use zero-based CSV of final owners (owner 1 → \"0\").
     """
 
     if not isinstance(players_mask, int) or players_mask <= 0:
         return ""
     if players_mask == 255:
         return ""
-    from campaign_event_ir.audience_encode import encode_prop_actions_sides
+    if not h3_color_to_final_owners:
+        raise VanillaStockVictoryError(
+            "map event sides require h3_color_to_final_owners from ownership contract"
+        )
+    from .ownership_contract import (
+        VanillaStockOwnershipError,
+        translate_h3_players_mask_to_final_sides,
+    )
 
-    return encode_prop_actions_sides(players_mask, context="vanilla_stock map event sides")
+    try:
+        return translate_h3_players_mask_to_final_sides(
+            players_mask,
+            h3_color_to_final_owners=h3_color_to_final_owners,
+        )
+    except VanillaStockOwnershipError as ex:
+        raise VanillaStockVictoryError(str(ex)) from ex
 
 
 def stock_random_squad_property_row(
@@ -495,6 +497,8 @@ def classify_map_event_guards(record: dict[str, Any]) -> dict[str, Any]:
     """Return nonempty guard stacks when H3 hasGuards is true with real creatures.
 
     Empty 0xFFFF-only slots demote to unguarded (same as campaign EventIR).
+    HotA-only creatureTypes absent from the baked stock strength model force a
+    named omit — stock cannot invent a SpawnsCreator budget for unknown units.
     """
 
     source_key = str(record.get("key") or record.get("sourceKey") or record.get("index"))
@@ -522,6 +526,36 @@ def classify_map_event_guards(record: dict[str, Any]) -> dict[str, Any]:
             "hostSid": STOCK_MAP_EVENT_MARKER_SID,
             "sourceKey": source_key,
             "demotedEmptyGuards": True,
+        }
+    try:
+        from .stock_neutral_strength import load_strength_model
+
+        known = {
+            int(k)
+            for k in (load_strength_model().get("creatureTypeSquadValuesFromGe") or {})
+        }
+    except Exception as ex:  # noqa: BLE001
+        raise VanillaStockVictoryError(
+            f"strength model unreadable while classifying guards for {source_key}: {ex}"
+        ) from ex
+    unknown = sorted(
+        {
+            int(stack["creatureType"])
+            for stack in stacks
+            if isinstance(stack, dict)
+            and isinstance(stack.get("creatureType"), int)
+            and int(stack["creatureType"]) not in known
+        }
+    )
+    if unknown:
+        return {
+            "hasGuards": False,
+            "guardStacks": [],
+            "hostSid": STOCK_MAP_EVENT_MARKER_SID,
+            "sourceKey": source_key,
+            "omit": True,
+            "omitReason": f"hota_or_unmapped_guard_creature_types_{unknown}",
+            "unknownCreatureTypes": unknown,
         }
     return {
         "hasGuards": True,
@@ -685,19 +719,26 @@ def choose_event_deco_node(
     """Place decorative gold FX near the Zone without covering the walkable host cell.
 
     Prefer one tile south (Olden +Y = north → y-1), matching the campaign probe map.
+    Search expands to Chebyshev-2 on dense HotA maps before failing closed.
     """
 
     px, py = node_xy(zone_node, atlas_width=atlas_width)
-    # South, north, east, west, then remaining Chebyshev-1 ring.
+    # South, north, east, west at radius 1, then the rest of Chebyshev-1, then Chebyshev-2.
     preferred = [(0, -1), (0, 1), (1, 0), (-1, 0)]
-    ring: list[tuple[int, int]] = []
-    for dy in (-1, 0, 1):
-        for dx in (-1, 0, 1):
-            if dx == 0 and dy == 0:
-                continue
-            if (dx, dy) not in preferred:
+    offsets: list[tuple[int, int]] = []
+    for radius in (1, 2):
+        ring: list[tuple[int, int]] = []
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                if max(abs(dx), abs(dy)) != radius:
+                    continue
+                if radius == 1 and (dx, dy) in preferred:
+                    continue
                 ring.append((dx, dy))
-    for dx, dy in preferred + ring:
+        if radius == 1:
+            offsets.extend(preferred)
+        offsets.extend(ring)
+    for dx, dy in offsets:
         x, y = px + dx, py + dy
         if not (0 <= x < atlas_width and 0 <= y < atlas_height):
             continue
@@ -709,7 +750,7 @@ def choose_event_deco_node(
             continue
         return node
     raise VanillaStockVictoryError(
-        f"map event {source_key}: no free adjacent cell for {STOCK_MAP_EVENT_DECO_SID} deco "
+        f"map event {source_key}: no free Chebyshev-2 cell for {STOCK_MAP_EVENT_DECO_SID} deco "
         f"near Zone node {zone_node}"
     )
 
@@ -955,6 +996,7 @@ def apply_map_events(
     atlas_height: int | None = None,
     layer_width: int | None = None,
     first_marker_id: int = 1,
+    h3_color_to_final_owners: dict[int, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Wire campaign-parity map events on stock hosts (Zone 1x1 / random-squad).
 
@@ -1065,12 +1107,29 @@ def apply_map_events(
         if not message and not reward_actions and not is_guarded and not has_pending_art_or_mana:
             notes.append(f"skipped empty noop map event {source_key}")
             continue
+        if not message and not is_guarded:
+            # Dialog hosts require non-empty text. HotA maps sometimes ship reward
+            # events with blank messages — omit with a named gap rather than invent copy.
+            omitted_gaps.append(
+                {
+                    "sourceKey": source_key,
+                    "objectId": object_id,
+                    "omit": "unguarded_event_empty_message",
+                    "reason": "dialog_host_requires_text_blank_h3m_message",
+                    "hadRewardActions": bool(reward_actions) or has_pending_art_or_mana,
+                }
+            )
+            notes.append(f"omitted blank-message unguarded map event {source_key}")
+            continue
 
         entity_sid = map_event_entity_sid(map_sid, object_id)
         dialog_sid = map_event_dialog_sid(map_sid, object_id)
         visited_counter = map_event_visited_counter_sid(map_sid, object_id)
         quest_sid = map_event_quest_sid(map_sid, object_id)
-        sides = h3_players_mask_to_sides(record.get("playersMask"))
+        sides = h3_players_mask_to_sides(
+            record.get("playersMask"),
+            h3_color_to_final_owners=h3_color_to_final_owners,
+        )
         computer_activate = bool(record.get("computerActivate"))
         if computer_activate is False and sides == "" and int(record.get("playersMask") or 0) == 0:
             raise VanillaStockVictoryError(

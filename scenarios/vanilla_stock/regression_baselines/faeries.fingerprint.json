@@ -1,0 +1,140 @@
+{
+  "schema": "homm3.vanilla_stock.regression_fingerprint.v1",
+  "id": "faeries",
+  "mapSid": "vanilla_stock_faeries",
+  "era": "AB",
+  "formatVersion": 21,
+  "sourceSize": 72,
+  "sourceLayers": 2,
+  "playersCount": 2,
+  "humanOwner": 1,
+  "h3ColorToFinalOwners": {
+    "0": [
+      1
+    ],
+    "7": [
+      2
+    ]
+  },
+  "ownerRenumberMapping": {
+    "1": 1,
+    "8": 2
+  },
+  "factionSplitRemappedObjectCount": 0,
+  "demotedMixedFactionCityCount": 0,
+  "orphanAiBoundCount": 0,
+  "orphanPlayableBoundCount": 0,
+  "victoryMode": "WINSTANDARD",
+  "mineEntityCount": null,
+  "playableFinalOwners": [
+    1,
+    2
+  ],
+  "humanFinalOwners": [
+    1
+  ],
+  "defeatAllEnemiesEnabled": true,
+  "spawnRows": [
+    {
+      "owner": 1,
+      "spawnType": 0,
+      "factionSid": "demon",
+      "isHeroDefined": true,
+      "isCityDefined": true
+    },
+    {
+      "owner": 2,
+      "spawnType": 1,
+      "factionSid": "nature",
+      "isHeroDefined": true,
+      "isCityDefined": true
+    }
+  ],
+  "eventCount": 22,
+  "unguardedEventCount": 19,
+  "guardedEventCount": 3,
+  "giveResActionCount": 0,
+  "omittedRewardGapKinds": [
+    "non_resource_reward_not_ported_on_stock"
+  ],
+  "timedBriefingCount": 12,
+  "timedGrantCount": 2,
+  "timedOmittedGapKinds": [],
+  "emittedInstanceCount": 3444,
+  "cityCount": 7,
+  "portalCount": 14,
+  "mineCount": 29,
+  "mapEventCount": 22,
+  "randomSquadCount": 35,
+  "randomItemCount": 28,
+  "omitReasonHistogram": {
+    "black_market_deferred_omit_mvp": 1,
+    "boat_no_stock_objectconfig": 1,
+    "corpse_deferred_omit_mvp": 1,
+    "creature_bank_deferred_omit_mvp": 4,
+    "crypt_bank_deferred_omit_mvp": 1,
+    "garrison_army_payload_deferred_omit_mvp": 2,
+    "object_anchor_outside_source_envelope_omit_mvp": 22,
+    "ocean_bottle_omit_mvp": 1,
+    "placed_hero_identity_lossy_omit_mvp_use_city_spawns": 1,
+    "shipwreck_water_bank_omit_mvp": 1,
+    "shipyard_requires_boat_omit_mvp": 1,
+    "sign_message_deferred_omit_mvp": 1,
+    "town_gate_or_body_intruder_cleared": 40,
+    "unmapped_template_object_id_106_omit_mvp": 1,
+    "unmapped_template_object_id_10_omit_mvp": 4,
+    "unmapped_template_object_id_110_omit_mvp": 1,
+    "unmapped_template_object_id_112_omit_mvp": 1,
+    "unmapped_template_object_id_121_omit_mvp": 3,
+    "unmapped_template_object_id_143_omit_mvp": 1,
+    "unmapped_template_object_id_155_omit_mvp": 23,
+    "unmapped_template_object_id_158_omit_mvp": 5,
+    "unmapped_template_object_id_15_omit_mvp": 4,
+    "unmapped_template_object_id_199_omit_mvp": 6,
+    "unmapped_template_object_id_25_omit_mvp": 1,
+    "unmapped_template_object_id_43_omit_mvp": 4,
+    "unmapped_template_object_id_44_omit_mvp": 1,
+    "unmapped_template_object_id_56_omit_mvp": 1,
+    "unmapped_template_object_id_63_omit_mvp": 1,
+    "unmapped_template_object_id_92_omit_mvp": 1,
+    "unmapped_template_object_id_9_omit_mvp": 5,
+    "wagon_deferred_omit_mvp": 1,
+    "warriors_tomb_deferred_omit_mvp": 1
+  },
+  "accessPortalClearedCount": 0,
+  "accessTownApproachClearedCount": 0,
+  "sceneryFootprintPlacementCount": 1987,
+  "objectsPropertiesKeys": [
+    "propActionsAfter",
+    "propActionsBefore",
+    "propActionsLegacy",
+    "propActivations",
+    "propAiIntetactions",
+    "propAiIntetated",
+    "propCities",
+    "propCitiesHold",
+    "propComments",
+    "propDialogWindows",
+    "propEntities",
+    "propGrowthUnits",
+    "propHeroes",
+    "propMainObjects",
+    "propMarkers",
+    "propNoCombineGeometries",
+    "propOwners",
+    "propPortals",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propRandomHires",
+    "propRandomItems",
+    "propRandomSquads",
+    "propResParams",
+    "propResources",
+    "propRewardParams",
+    "propSpawns",
+    "propSquads",
+    "propVariants",
+    "propsName"
+  ],
+  "campaignInfoPreserved": true
+}

@@ -25,8 +25,22 @@ jobs:
           python - <<'PY'
           from vanilla_stock.stock_neutral_strength import load_strength_model, rounded_requested_value
           from vanilla_stock import SCHEMA_MAP
+          from vanilla_stock.ownership_contract import SCHEMA as OWNERSHIP_SCHEMA
+          from vanilla_stock.access_contract import SCHEMA as ACCESS_SCHEMA
+          from vanilla_stock.regression_fingerprint import SCHEMA as FINGERPRINT_SCHEMA
+          from approach_cell import surface_emit as single
           model = load_strength_model()
           assert model["schema"] == "vanilla_stock.h3_neutral_strength_model.v1"
           assert rounded_requested_value(1640.0, rounding=50.0) == 1650.0
-          print("ok", SCHEMA_MAP, "tiers", sorted(model["tierMedianSquadValuesFromGeH3"]))
+          assert callable(single.plan_ai_multi_faction_city_owner_split)
+          assert callable(single.renumber_map_owners_to_native_compact)
+          print(
+              "ok",
+              SCHEMA_MAP,
+              OWNERSHIP_SCHEMA,
+              ACCESS_SCHEMA,
+              FINGERPRINT_SCHEMA,
+              "tiers",
+              sorted(model["tierMedianSquadValuesFromGeH3"]),
+          )
           PY

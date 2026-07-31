@@ -1,0 +1,140 @@
+{
+  "schema": "homm3.vanilla_stock.regression_fingerprint.v1",
+  "id": "good_to_go",
+  "mapSid": "vanilla_stock_good_to_go",
+  "era": "RoE",
+  "formatVersion": 14,
+  "sourceSize": 36,
+  "sourceLayers": 1,
+  "playersCount": 4,
+  "humanOwner": 1,
+  "h3ColorToFinalOwners": {
+    "0": [
+      1
+    ],
+    "1": [
+      2
+    ],
+    "3": [
+      3
+    ],
+    "4": [
+      4
+    ]
+  },
+  "ownerRenumberMapping": {
+    "1": 1,
+    "2": 2,
+    "4": 3,
+    "5": 4
+  },
+  "factionSplitRemappedObjectCount": 0,
+  "demotedMixedFactionCityCount": 0,
+  "orphanAiBoundCount": 0,
+  "orphanPlayableBoundCount": 0,
+  "victoryMode": "WINSTANDARD",
+  "mineEntityCount": null,
+  "playableFinalOwners": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "humanFinalOwners": [
+    1,
+    2
+  ],
+  "defeatAllEnemiesEnabled": true,
+  "spawnRows": [
+    {
+      "owner": 1,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 2,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 3,
+      "spawnType": 1,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 4,
+      "spawnType": 1,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    }
+  ],
+  "eventCount": 0,
+  "unguardedEventCount": 0,
+  "guardedEventCount": 0,
+  "giveResActionCount": 0,
+  "omittedRewardGapKinds": [],
+  "timedBriefingCount": 0,
+  "timedGrantCount": 1,
+  "timedOmittedGapKinds": [
+    "unknown"
+  ],
+  "emittedInstanceCount": 610,
+  "cityCount": 4,
+  "portalCount": 0,
+  "mineCount": 7,
+  "mapEventCount": 0,
+  "randomSquadCount": 31,
+  "randomItemCount": 15,
+  "omitReasonHistogram": {
+    "object_anchor_outside_source_envelope_omit_mvp": 1,
+    "placed_hero_identity_lossy_omit_mvp_use_city_spawns": 4,
+    "random_hero_omit_mvp_use_city_spawns": 2,
+    "unmapped_template_object_id_155_omit_mvp": 28,
+    "unmapped_template_object_id_48_omit_mvp": 1,
+    "unmapped_template_object_id_97_omit_mvp": 2,
+    "wagon_deferred_omit_mvp": 1
+  },
+  "accessPortalClearedCount": 0,
+  "accessTownApproachClearedCount": 0,
+  "sceneryFootprintPlacementCount": 319,
+  "objectsPropertiesKeys": [
+    "propActionsAfter",
+    "propActionsBefore",
+    "propActionsLegacy",
+    "propActivations",
+    "propAiIntetactions",
+    "propAiIntetated",
+    "propCities",
+    "propCitiesHold",
+    "propComments",
+    "propDialogWindows",
+    "propEntities",
+    "propGrowthUnits",
+    "propHeroes",
+    "propMainObjects",
+    "propMarkers",
+    "propNoCombineGeometries",
+    "propOwners",
+    "propPortals",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propRandomHires",
+    "propRandomItems",
+    "propRandomSquads",
+    "propResParams",
+    "propResources",
+    "propRewardParams",
+    "propSpawns",
+    "propSquads",
+    "propVariants",
+    "propsName"
+  ],
+  "campaignInfoPreserved": true
+}

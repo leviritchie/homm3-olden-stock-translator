@@ -66,11 +66,24 @@ def main(argv: list[str] | None = None) -> int:
             continue
         map_path = artifact_root / scenario_id / "maps" / f"{map_sid}.map"
         manifest = artifact_root / scenario_id / f"{map_sid}.manifest.json"
-        if not map_path.is_file():
-            errors.append(f"{scenario_id}: missing map {map_path}")
-            continue
-        if not manifest.is_file():
-            errors.append(f"{scenario_id}: missing manifest {manifest}")
+        role = str(row.get("role") or "")
+        optional = role == "fan_import" or bool(row.get("buildOptional"))
+        if not map_path.is_file() or not manifest.is_file():
+            if optional:
+                print(f"OPTIONAL SKIP {scenario_id}: missing map/manifest artifact", flush=True)
+                reports.append(
+                    {
+                        "id": scenario_id,
+                        "mapSid": map_sid,
+                        "result": "OPTIONAL_SKIP",
+                        "optionalFailure": True,
+                    }
+                )
+                continue
+            if not map_path.is_file():
+                errors.append(f"{scenario_id}: missing map {map_path}")
+            if not manifest.is_file():
+                errors.append(f"{scenario_id}: missing manifest {manifest}")
             continue
         try:
             report = validate_vanilla_stock_map(
@@ -83,6 +96,17 @@ def main(argv: list[str] | None = None) -> int:
                 manifest_path=manifest,
             )
         except VanillaStockValidationError as ex:
+            if optional:
+                print(f"OPTIONAL FAIL {scenario_id}: {ex}", flush=True)
+                reports.append(
+                    {
+                        "id": scenario_id,
+                        "mapSid": map_sid,
+                        "result": "OPTIONAL_FAIL",
+                        "optionalFailure": True,
+                    }
+                )
+                continue
             errors.append(f"{scenario_id}: {ex}")
             continue
         if args.require_installed or batch.get("requireInstalled"):

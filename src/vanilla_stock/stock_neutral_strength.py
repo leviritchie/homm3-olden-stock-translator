@@ -10,14 +10,13 @@ native units; stock native tier medians are near the GE ``h3_`` scale.
 
 Regenerate the snapshot with::
 
-    python -m vanilla_stock.stock_neutral_strength  # requires GE_CORE + monorepo surface_emit for regen only
+    python -m experiments.campaign_port_poc.vanilla_stock.stock_neutral_strength
 """
 
 from __future__ import annotations
 
 import json
 import math
-import os
 import re
 import statistics
 import zipfile
@@ -26,19 +25,17 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-
-def _env_path(name: str) -> Path | None:
-    raw = os.environ.get(name)
-    return Path(raw) if raw else None
-
-
 STRENGTH_MODEL_PATH = Path(__file__).with_name("h3_neutral_strength_model.json")
 CAMPAIGN_STRENGTH_MODEL_PATH = Path(__file__).resolve().parents[1] / "h3_random_monster_strength_model.json"
-SURFACE_EMIT_PATH = _env_path("MONOREPO_SURFACE_EMIT") or (
-    Path(__file__).resolve().parents[1] / "approach_cell" / "surface_emit.py"
+SURFACE_EMIT_PATH = Path(__file__).resolve().parents[1] / "approach_cell" / "surface_emit.py"
+DEFAULT_GE_CORE = Path(
+    r"V:/SteamLibrary/steamapps/common/Heroes of Might and Magic Olden Era - Golden Era/"
+    r"HeroesOldenEra_Data/StreamingAssets/Core.zip"
 )
-DEFAULT_GE_CORE = _env_path("GE_CORE")
-DEFAULT_STOCK_CORE = _env_path("STOCK_CORE")
+DEFAULT_STOCK_CORE = Path(
+    r"V:/SteamLibrary/steamapps/common/Heroes of Might and Magic Olden Era/"
+    r"HeroesOldenEra_Data/StreamingAssets/Core.zip"
+)
 
 _MODEL_CACHE: dict[str, Any] | None = None
 
@@ -267,25 +264,22 @@ def _unit_squad_index(core_zip: Path) -> dict[str, dict[str, float | int]]:
 
 def regenerate_strength_model(
     *,
-    ge_core: Path | None = DEFAULT_GE_CORE,
-    stock_core: Path | None = DEFAULT_STOCK_CORE,
+    ge_core: Path = DEFAULT_GE_CORE,
+    stock_core: Path = DEFAULT_STOCK_CORE,
     out_path: Path = STRENGTH_MODEL_PATH,
-    surface_emit_path: Path | None = SURFACE_EMIT_PATH,
+    surface_emit_path: Path = SURFACE_EMIT_PATH,
     campaign_model_path: Path = CAMPAIGN_STRENGTH_MODEL_PATH,
 ) -> dict[str, Any]:
     """Rebuild ``h3_neutral_strength_model.json`` from GE Core + campaign nominal counts."""
 
-    if ge_core is None or not ge_core.is_file():
-        raise StockNeutralStrengthError("GE Core.zip not found (set GE_CORE or pass ge_core=...)")
-    if stock_core is None or not stock_core.is_file():
-        raise StockNeutralStrengthError("stock Core.zip not found (set STOCK_CORE or pass stock_core=...)")
+    if not ge_core.is_file():
+        raise StockNeutralStrengthError(f"GE Core.zip not found: {ge_core}")
+    if not stock_core.is_file():
+        raise StockNeutralStrengthError(f"stock Core.zip not found: {stock_core}")
     if not campaign_model_path.is_file():
         raise StockNeutralStrengthError(f"campaign strength model not found: {campaign_model_path}")
-    if surface_emit_path is None or not surface_emit_path.is_file():
-        raise StockNeutralStrengthError(
-            "surface_emit.py with MAP_EVENT_GUARD_UNIT_BY_CREATURE_TYPE not found "
-            "(set MONOREPO_SURFACE_EMIT to the private monorepo file for regen)"
-        )
+    if not surface_emit_path.is_file():
+        raise StockNeutralStrengthError(f"surface_emit.py not found: {surface_emit_path}")
 
     campaign = json.loads(campaign_model_path.read_text(encoding="utf-8"))
     nominal_raw = campaign.get("nominalH3RandomStackCountsByLevel")
@@ -344,6 +338,8 @@ def regenerate_strength_model(
             "Stock SpawnsCreator fills native units into that budget; stock native tier medians are near h3_ medians. "
             "Do not bake NeutralsDifficulty into requestedValue (isIgnoreMultiply / runtime multiply)."
         ),
+        "geCoreZip": str(ge_core),
+        "stockCoreZip": str(stock_core),
         "nominalH3RandomStackCountsByLevel": {str(key): value for key, value in sorted(nominal.items())},
         "requestedValueRounding": rounding,
         "tierMedianSquadValuesFromGeH3": tier_med_ge,

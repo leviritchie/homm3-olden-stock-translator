@@ -4790,6 +4790,7 @@
     }
   ],
   "schema": "homm3.vanilla_stock.copied_substitution_table.v1",
+  "sourceArtifact": "artifacts/campaign_port_poc/homecoming_poc/entity_substitutions/homecoming.olden_entity_substitution_map.json",
   "sourceSchema": "homm3.homecoming_olden_entity_substitution_map.v0",
   "sourceStatus": "query_shape_substitutions_not_playable"
 }

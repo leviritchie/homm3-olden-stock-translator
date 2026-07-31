@@ -7,7 +7,6 @@ from typing import Any
 import h3m_object_registry as h3obj
 
 from . import STOCK_SUBTERRANEAN_GATE_SID
-
 # H3 town subtype → stock city + faction.
 H3_TOWN_SUBTYPE_TO_STOCK: dict[int, tuple[str, str]] = {
     0: ("human_city", "human"),  # Castle / Temple
@@ -53,7 +52,7 @@ OMIT_OBJECT_IDS: dict[int, str] = {
     h3obj.OBJECT_OCEAN_BOTTLE: "ocean_bottle_omit_mvp",
     # Complex payloads deferred fail-closed-as-omit for MVP playability slice.
     # OBJECT_EVENT hosts: unguarded → Zone 1x1 markers; guarded → random-squad (victory_events).
-    h3obj.OBJECT_SEER_HUT: "seer_hut_payload_deferred_omit_mvp",
+    # OBJECT_SEER_HUT → omit (no stock interactable; GE/campaign custom only).
     h3obj.OBJECT_QUEST_GUARD: "quest_guard_payload_deferred_omit_mvp",
     h3obj.OBJECT_PRISON: "prison_payload_deferred_omit_mvp",
     h3obj.OBJECT_HERO_PLACEHOLDER: "hero_placeholder_deferred_omit_mvp",
@@ -90,7 +89,7 @@ DIRECT_TEMPLATE_SID: dict[int, str] = {
     h3obj.OBJECT_SUBTERRANEAN_GATE: STOCK_SUBTERRANEAN_GATE_SID,
     h3obj.OBJECT_WHIRLPOOL: "portal_magic",
     h3obj.OBJECT_RANDOM_TOWN: "random-city",
-    h3obj.OBJECT_ARTIFACT: "random-item",
+    # Specific artifacts (OBJECT_ARTIFACT=5) resolve via h3_artifact_stock_map catalog.
     h3obj.OBJECT_RANDOM_ARTIFACT: "random-item",
     h3obj.OBJECT_RANDOM_ARTIFACT_TREASURE: "random-item",
     h3obj.OBJECT_RANDOM_ARTIFACT_MINOR: "random-item",
@@ -423,6 +422,29 @@ def resolve_object_sid(
     if oid in OMIT_OBJECT_IDS:
         return {"action": "omit", "reason": OMIT_OBJECT_IDS[oid], "templateObjectId": oid}
 
+    if oid == h3obj.OBJECT_SEER_HUT:
+        # Custom Core ObjectConfig (homecoming_custom_objects) is GE/campaign-only.
+        # Vanilla stock has no legal seer-hut interactable — omit fail-closed by name.
+        return {
+            "action": "omit",
+            "reason": "seer_hut_omitted_no_stock_interactable",
+            "templateObjectId": oid,
+        }
+
+    if oid == h3obj.OBJECT_ARTIFACT:
+        # Vanilla stock must stay Core-legal. Exact catalog SIDs are GE/campaign
+        # overlay artifacts; remap specific H3 artifacts to stock random-item.
+        if "random-item" not in stock_object_ids:
+            raise VanillaStockObjectMapError("stock random-item SID missing from Core")
+        return {
+            "action": "emit",
+            "sid": "random-item",
+            "reason": "lossy_specific_h3_artifact_to_stock_random_item",
+            "kind": "artifact",
+            "templateObjectId": oid,
+            "h3ArtifactSubtype": subtype,
+        }
+
     if oid in (h3obj.OBJECT_TOWN,):
         if subtype in H3_TOWN_SUBTYPE_UNMAPPED_FREE_CHOICE:
             if "random-city" not in stock_object_ids:
@@ -495,6 +517,25 @@ def resolve_object_sid(
         if sid not in stock_object_ids:
             raise VanillaStockObjectMapError(f"mine SID missing from stock Core: {sid}")
         return {"action": "emit", "sid": sid, "reason": "mine_subtype_or_animation", "kind": "mine"}
+
+    if oid == h3obj.OBJECT_MONSTER:
+        # Concrete SoD creature indexes are baked into the stock strength model.
+        # HotA-only creatureTypes (e.g. 157 on Mysterious Island) have no stock
+        # budget — omit by name rather than inventing a silent strength guess.
+        from .stock_neutral_strength import load_strength_model
+
+        try:
+            model = load_strength_model()
+            known = set(int(k) for k in (model.get("creatureTypeSquadValuesFromGe") or {}))
+        except Exception as ex:  # noqa: BLE001 - surface as object-map error
+            raise VanillaStockObjectMapError(f"strength model unreadable for monster omit gate: {ex}") from ex
+        if subtype not in known:
+            return {
+                "action": "omit",
+                "reason": f"hota_or_unmapped_creature_type_{subtype}_no_stock_squad_value",
+                "templateObjectId": oid,
+                "templateSubtype": subtype,
+            }
 
     if oid in (
         h3obj.OBJECT_CREATURE_GENERATOR_1,

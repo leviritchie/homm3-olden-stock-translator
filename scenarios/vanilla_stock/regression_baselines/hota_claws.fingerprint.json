@@ -1,0 +1,180 @@
+{
+  "schema": "homm3.vanilla_stock.regression_fingerprint.v1",
+  "id": "hota_claws",
+  "mapSid": "vanilla_stock_hota_claws",
+  "era": "HotA",
+  "formatVersion": 32,
+  "sourceSize": 72,
+  "sourceLayers": 1,
+  "playersCount": 5,
+  "humanOwner": 1,
+  "h3ColorToFinalOwners": {
+    "0": [
+      2
+    ],
+    "1": [
+      1
+    ],
+    "2": [
+      3
+    ],
+    "4": [
+      4
+    ],
+    "7": [
+      5
+    ]
+  },
+  "ownerRenumberMapping": {
+    "1": 2,
+    "2": 1,
+    "3": 3,
+    "5": 4,
+    "8": 5
+  },
+  "factionSplitRemappedObjectCount": 0,
+  "demotedMixedFactionCityCount": 0,
+  "orphanAiBoundCount": 0,
+  "orphanPlayableBoundCount": 0,
+  "victoryMode": "WINSTANDARD",
+  "mineEntityCount": null,
+  "playableFinalOwners": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "humanFinalOwners": [
+    1
+  ],
+  "defeatAllEnemiesEnabled": true,
+  "spawnRows": [
+    {
+      "owner": 1,
+      "spawnType": 0,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 2,
+      "spawnType": 1,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 3,
+      "spawnType": 1,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 4,
+      "spawnType": 1,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    },
+    {
+      "owner": 5,
+      "spawnType": 1,
+      "factionSid": "",
+      "isHeroDefined": false,
+      "isCityDefined": false
+    }
+  ],
+  "eventCount": 0,
+  "unguardedEventCount": 0,
+  "guardedEventCount": 0,
+  "giveResActionCount": 0,
+  "omittedRewardGapKinds": [],
+  "timedBriefingCount": 2,
+  "timedGrantCount": 1,
+  "timedOmittedGapKinds": [],
+  "emittedInstanceCount": 1151,
+  "cityCount": 6,
+  "portalCount": 0,
+  "mineCount": 10,
+  "mapEventCount": 0,
+  "randomSquadCount": 60,
+  "randomItemCount": 24,
+  "omitReasonHistogram": {
+    "black_market_deferred_omit_mvp": 1,
+    "border_gate_deferred_omit_mvp": 5,
+    "corpse_deferred_omit_mvp": 1,
+    "creature_bank_deferred_omit_mvp": 9,
+    "garrison_army_payload_deferred_omit_mvp": 2,
+    "grail_deferred_omit_mvp": 1,
+    "quest_guard_payload_deferred_omit_mvp": 4,
+    "random_dwelling_decoder_unsupported_omit_mvp": 1,
+    "random_dwelling_lvl_unsupported_omit_mvp": 6,
+    "seer_hut_omitted_no_stock_interactable": 12,
+    "shipwreck_water_bank_omit_mvp": 3,
+    "stock_access_portal_or_town_approach_cleared": 2,
+    "unmapped_template_object_id_106_omit_mvp": 1,
+    "unmapped_template_object_id_10_omit_mvp": 3,
+    "unmapped_template_object_id_114_omit_mvp": 2,
+    "unmapped_template_object_id_115_omit_mvp": 6,
+    "unmapped_template_object_id_117_omit_mvp": 1,
+    "unmapped_template_object_id_130_omit_mvp": 2,
+    "unmapped_template_object_id_138_omit_mvp": 4,
+    "unmapped_template_object_id_139_omit_mvp": 23,
+    "unmapped_template_object_id_140_omit_mvp": 37,
+    "unmapped_template_object_id_142_omit_mvp": 1,
+    "unmapped_template_object_id_144_omit_mvp": 10,
+    "unmapped_template_object_id_145_omit_mvp": 3,
+    "unmapped_template_object_id_146_omit_mvp": 1,
+    "unmapped_template_object_id_154_omit_mvp": 3,
+    "unmapped_template_object_id_155_omit_mvp": 1,
+    "unmapped_template_object_id_157_omit_mvp": 11,
+    "unmapped_template_object_id_158_omit_mvp": 5,
+    "unmapped_template_object_id_15_omit_mvp": 1,
+    "unmapped_template_object_id_160_omit_mvp": 1,
+    "unmapped_template_object_id_161_omit_mvp": 9,
+    "unmapped_template_object_id_24_omit_mvp": 1,
+    "unmapped_template_object_id_25_omit_mvp": 1,
+    "unmapped_template_object_id_35_omit_mvp": 1,
+    "unmapped_template_object_id_48_omit_mvp": 1,
+    "unmapped_template_object_id_57_omit_mvp": 7,
+    "unmapped_template_object_id_9_omit_mvp": 3
+  },
+  "accessPortalClearedCount": 0,
+  "accessTownApproachClearedCount": 2,
+  "sceneryFootprintPlacementCount": 733,
+  "objectsPropertiesKeys": [
+    "propActionsAfter",
+    "propActionsBefore",
+    "propActionsLegacy",
+    "propActivations",
+    "propAiIntetactions",
+    "propAiIntetated",
+    "propCities",
+    "propCitiesHold",
+    "propComments",
+    "propDialogWindows",
+    "propEntities",
+    "propGrowthUnits",
+    "propHeroes",
+    "propMainObjects",
+    "propMarkers",
+    "propNoCombineGeometries",
+    "propOwners",
+    "propPortals",
+    "propQuestMarkers",
+    "propQuestNames",
+    "propRandomHires",
+    "propRandomItems",
+    "propRandomSquads",
+    "propResParams",
+    "propResources",
+    "propRewardParams",
+    "propSpawns",
+    "propSquads",
+    "propVariants",
+    "propsName"
+  ],
+  "campaignInfoPreserved": true
+}
