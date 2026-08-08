@@ -1459,6 +1459,8 @@ def build_vanilla_stock_map(
     settings = map_data.get("settings") if isinstance(map_data.get("settings"), dict) else {}
     settings["mapWinConditions"] = []
     settings["isScenario"] = True
+    # Allow auto-battle vs neutrals/guards; block auto vs enemy heroes.
+    settings["disableAutoBattleAgainstEnemyHeroes"] = True
     map_data["settings"] = settings
 
     source_mines = source_mine_records(

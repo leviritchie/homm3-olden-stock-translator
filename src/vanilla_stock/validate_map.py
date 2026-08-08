@@ -1261,6 +1261,27 @@ def validate_vanilla_stock_map(
                 "propRandomSquads.fraction must be a string (stock uses \"\" or faction sid); "
                 f"non-string fraction on ids {bad_fraction[:8]}"
             )
+        non_autobattle = [
+            int(row["id"])
+            for row in random_squad_props
+            if isinstance(row, dict)
+            and isinstance(row.get("id"), int)
+            and row.get("isAutobatle") is not True
+        ]
+        if non_autobattle:
+            errors.append(
+                "propRandomSquads.isAutobatle must be true for neutrals/guards "
+                "(enemy-hero auto is settings-gated); "
+                f"false/missing on ids {non_autobattle[:8]}"
+            )
+        settings = (
+            map_data.get("settings") if isinstance(map_data.get("settings"), dict) else {}
+        )
+        if settings.get("disableAutoBattleAgainstEnemyHeroes") is not True:
+            errors.append(
+                "settings.disableAutoBattleAgainstEnemyHeroes must be true; "
+                f"got {settings.get('disableAutoBattleAgainstEnemyHeroes')!r}"
+            )
 
         give_res_count = int(events_manifest.get("giveResActionCount") or 0)
         if give_res_count > 0 and "GiveRes" not in quest_blob:

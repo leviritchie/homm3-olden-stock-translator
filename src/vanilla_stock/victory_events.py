@@ -465,7 +465,9 @@ def stock_random_squad_property_row(
         "weeklyIncrementBonus": 0.0,
         "diplomacyUnitsCountBonus": 0.0,
         "isEscape": False,
-        "isAutobatle": False,
+        # Neutrals/guards: allow adventure-map auto-battle. Enemy-hero auto is
+        # gated separately via settings.disableAutoBattleAgainstEnemyHeroes.
+        "isAutobatle": True,
         "isFreeDiplomacy": False,
         "isCampaignFreeDiplomacy": False,
         "isCampaignDiplomacy": False,

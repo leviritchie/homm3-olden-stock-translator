@@ -62,6 +62,10 @@ translator now derives final owners **after** town bindings:
   cells walkable (no Golden Era-only objects).
 - Optional scenery diversify post-pass: `--enable-scenery-canon-postpass`.
 
+## Auto-battle
+
+Converted maps allow adventure-map auto-combat against neutrals/guards (`propRandomSquads.isAutobatle=true`). Auto-combat against enemy heroes stays disabled via `settings.disableAutoBattleAgainstEnemyHeroes=true`.
+
 ## Neutral army strength
 
 Heroes 3 and Olden Era use different systems to represent neutral stack strength. The utility calibrates this reasonably closely.
